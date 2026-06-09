@@ -1,0 +1,13 @@
+# Database
+data/*.db
+data/*.sqlite
+
+# Logs
+logs/*.log
+*.log
+
+# OS & IDE folders
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
