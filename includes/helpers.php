@@ -1,31 +1,85 @@
 <?php
 // includes/helpers.php
 
+// Try to enable required extensions dynamically if they aren't loaded yet
+if (!extension_loaded('openssl')) {
+    @ini_set('extension', 'openssl');
+}
+if (!extension_loaded('pdo_sqlite')) {
+    @ini_set('extension', 'pdo_sqlite');
+}
+if (!extension_loaded('pdo_odbc')) {
+    @ini_set('extension', 'pdo_odbc');
+}
+
 require_once dirname(__DIR__) . '/config/app.php';
 require_once __DIR__ . '/db.php';
 
 // AES-256-CBC Encryption for storing SQL Server passwords
 function encryptPassword($password) {
     $key = hash('sha256', APP_KEY, true);
-    $ivLength = openssl_cipher_iv_length('aes-256-cbc');
-    $iv = openssl_random_pseudo_bytes($ivLength);
-    $encrypted = openssl_encrypt($password, 'aes-256-cbc', $key, 0, $iv);
-    return base64_encode($iv . $encrypted);
+    if (extension_loaded('openssl')) {
+        $ivLength = openssl_cipher_iv_length('aes-256-cbc');
+        if (function_exists('random_bytes')) {
+            $iv = random_bytes($ivLength);
+        } else {
+            $iv = openssl_random_pseudo_bytes($ivLength);
+        }
+        $encrypted = openssl_encrypt($password, 'aes-256-cbc', $key, 0, $iv);
+        return 'openssl:' . base64_encode($iv . $encrypted);
+    } else {
+        // Fallback encryption when OpenSSL is not available
+        $fallbackEncrypted = '';
+        $keyLen = strlen(APP_KEY);
+        for ($i = 0; $i < strlen($password); $i++) {
+            $fallbackEncrypted .= $password[$i] ^ APP_KEY[$i % $keyLen];
+        }
+        return 'fallback:' . base64_encode($fallbackEncrypted);
+    }
 }
 
 // AES-256-CBC Decryption for retrieval of SQL Server credentials
 function decryptPassword($encryptedBase64) {
-    $data = base64_decode($encryptedBase64);
     $key = hash('sha256', APP_KEY, true);
-    $ivLength = openssl_cipher_iv_length('aes-256-cbc');
     
-    if (strlen($data) <= $ivLength) {
-        return false;
+    // Check encryption method prefix
+    if (strpos($encryptedBase64, 'openssl:') === 0) {
+        if (!extension_loaded('openssl')) {
+            throw new Exception("The stored password was encrypted using OpenSSL, but the PHP OpenSSL extension is not currently loaded. Please enable extension=openssl in your php.ini.");
+        }
+        $data = base64_decode(substr($encryptedBase64, 8));
+        $ivLength = openssl_cipher_iv_length('aes-256-cbc');
+        if (strlen($data) <= $ivLength) {
+            return false;
+        }
+        $iv = substr($data, 0, $ivLength);
+        $encrypted = substr($data, $ivLength);
+        return openssl_decrypt($encrypted, 'aes-256-cbc', $key, 0, $iv);
+    } elseif (strpos($encryptedBase64, 'fallback:') === 0) {
+        $passwordData = base64_decode(substr($encryptedBase64, 9));
+        if ($passwordData === false) {
+            return false;
+        }
+        $decrypted = '';
+        $keyLen = strlen(APP_KEY);
+        for ($i = 0; $i < strlen($passwordData); $i++) {
+            $decrypted .= $passwordData[$i] ^ APP_KEY[$i % $keyLen];
+        }
+        return $decrypted;
+    } else {
+        // Legacy passwords (no prefix) - default to openssl
+        if (!extension_loaded('openssl')) {
+            throw new Exception("The stored password requires the PHP OpenSSL extension, which is not loaded. Please enable extension=openssl in your php.ini.");
+        }
+        $data = base64_decode($encryptedBase64);
+        $ivLength = openssl_cipher_iv_length('aes-256-cbc');
+        if (strlen($data) <= $ivLength) {
+            return false;
+        }
+        $iv = substr($data, 0, $ivLength);
+        $encrypted = substr($data, $ivLength);
+        return openssl_decrypt($encrypted, 'aes-256-cbc', $key, 0, $iv);
     }
-    
-    $iv = substr($data, 0, $ivLength);
-    $encrypted = substr($data, $ivLength);
-    return openssl_decrypt($encrypted, 'aes-256-cbc', $key, 0, $iv);
 }
 
 // CSRF Protection
@@ -34,7 +88,13 @@ function getCsrfToken() {
         session_start();
     }
     if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+        if (function_exists('random_bytes')) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        } elseif (function_exists('openssl_random_pseudo_bytes')) {
+            $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+        } else {
+            $_SESSION['csrf_token'] = bin2hex(md5(uniqid(rand(), true)));
+        }
     }
     return $_SESSION['csrf_token'];
 }

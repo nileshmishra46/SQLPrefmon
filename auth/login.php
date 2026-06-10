@@ -120,7 +120,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </button>
             </form>
             
-            <!-- Credentials footer instruction removed -->
+            <div class="login-footer animate-fade-in" style="animation-delay: 0.2s;">
+                <p style="margin-bottom: 0.5rem; font-weight: 500;">
+                    <i class="fa-solid fa-circle-info" style="color: var(--color-info); margin-right: 0.25rem;"></i>
+                    Demo Setup Credentials:
+                </p>
+                <div style="display: flex; gap: 0.75rem; justify-content: center;">
+                    <span>Username: <code>admin</code></span>
+                    <span>Password: <code>Sumo@123</code></span>
+                </div>
+            </div>
         </div>
     </div>
 </body>
