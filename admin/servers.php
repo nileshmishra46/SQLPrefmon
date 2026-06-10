@@ -223,14 +223,22 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                                             </button>
                                         </form>
                                         
-                                        <!-- Delete Button -->
+                                        <!-- Delete Button with Inline Two-Stage Confirmation -->
                                         <form action="servers.php" method="POST" style="display:inline;">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="server_id" value="<?= $srv['id'] ?>">
                                             <input type="hidden" name="csrf_token" value="<?= getCsrfToken() ?>">
-                                            <button type="button" class="btn btn-danger" style="padding: 0.35rem 0.5rem; font-size: 0.75rem;" title="Delete server" onclick="if(confirm('Are you sure you want to remove this server? Historical snapshots, waittypes, indexes and recommendations will be deleted.')) this.form.submit();">
-                                                <i class="fa-solid fa-trash-can" style="pointer-events: none;"></i>
-                                            </button>
+                                            <div style="display: inline-flex; gap: 0.25rem;" class="delete-zone">
+                                                <button type="button" class="btn btn-danger btn-delete-init" style="padding: 0.35rem 0.5rem; font-size: 0.75rem;" title="Delete server" onclick="showDeleteConfirm(this)">
+                                                    <i class="fa-solid fa-trash-can"></i>
+                                                </button>
+                                                <button type="submit" class="btn btn-danger btn-delete-confirm" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; display: none;" title="Confirm deletion">
+                                                    <i class="fa-solid fa-triangle-exclamation"></i> Delete?
+                                                </button>
+                                                <button type="button" class="btn btn-secondary btn-delete-cancel" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; display: none;" title="Cancel" onclick="cancelDelete(this)">
+                                                    <i class="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </div>
                                         </form>
                                     </div>
                                 </td>
@@ -318,6 +326,22 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
         </form>
     </div>
 </div>
+
+<script>
+function showDeleteConfirm(btn) {
+    const zone = btn.closest('.delete-zone');
+    zone.querySelector('.btn-delete-init').style.display = 'none';
+    zone.querySelector('.btn-delete-confirm').style.display = 'inline-flex';
+    zone.querySelector('.btn-delete-cancel').style.display = 'inline-flex';
+}
+
+function cancelDelete(btn) {
+    const zone = btn.closest('.delete-zone');
+    zone.querySelector('.btn-delete-init').style.display = 'inline-flex';
+    zone.querySelector('.btn-delete-confirm').style.display = 'none';
+    zone.querySelector('.btn-delete-cancel').style.display = 'none';
+}
+</script>
 
 <?php
 require_once dirname(__DIR__) . '/templates/footer.php';
