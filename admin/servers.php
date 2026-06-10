@@ -224,12 +224,12 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                                         </form>
                                         
                                         <!-- Delete Button -->
-                                        <form action="servers.php" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to remove this server? Historical snapshots, waittypes, indexes and recommendations will be deleted.');">
+                                        <form action="servers.php" method="POST" style="display:inline;">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="server_id" value="<?= $srv['id'] ?>">
                                             <input type="hidden" name="csrf_token" value="<?= getCsrfToken() ?>">
-                                            <button type="submit" class="btn btn-danger" style="padding: 0.35rem 0.5rem; font-size: 0.75rem;" title="Delete server">
-                                                <i class="fa-solid fa-trash-can"></i>
+                                            <button type="button" class="btn btn-danger" style="padding: 0.35rem 0.5rem; font-size: 0.75rem;" title="Delete server" onclick="if(confirm('Are you sure you want to remove this server? Historical snapshots, waittypes, indexes and recommendations will be deleted.')) this.form.submit();">
+                                                <i class="fa-solid fa-trash-can" style="pointer-events: none;"></i>
                                             </button>
                                         </form>
                                     </div>
