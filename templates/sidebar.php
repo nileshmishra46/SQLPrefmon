@@ -48,6 +48,16 @@ function isLinkActive($page, $dir = null) {
                 <i class="fa-solid fa-clock-rotate-left"></i>
                 <span>Historical Trends</span>
             </a>
+
+            <a href="../history/queries.php" class="nav-link <?= isLinkActive('queries.php', 'history') ?>">
+                <i class="fa-solid fa-terminal"></i>
+                <span>Query History</span>
+            </a>
+
+            <a href="../history/blocking.php" class="nav-link <?= isLinkActive('blocking.php', 'history') ?>">
+                <i class="fa-solid fa-ban"></i>
+                <span>Blocking Log</span>
+            </a>
         </div>
         
         <div class="nav-section">

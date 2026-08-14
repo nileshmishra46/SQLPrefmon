@@ -20,6 +20,7 @@ $recomp = getAppSetting('recompile_threshold', THRESHOLD_RECOMPILE_SEC);
 $signalWait = getAppSetting('signal_wait_pct', THRESHOLD_SIGNAL_WAIT_PCT);
 $indexFrag = getAppSetting('index_frag_pct', THRESHOLD_INDEX_FRAG_PCT);
 $retention = getAppSetting('retention_days', 30);
+$blockingMin = getAppSetting('blocking_threshold_min', THRESHOLD_BLOCKING_THRESHOLD_MIN);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrfToken = $_POST['csrf_token'] ?? '';
@@ -34,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newSignalWait = (float)($_POST['signal_wait_pct'] ?? THRESHOLD_SIGNAL_WAIT_PCT);
         $newIndexFrag = (float)($_POST['index_frag_pct'] ?? THRESHOLD_INDEX_FRAG_PCT);
         $newRetention = (int)($_POST['retention_days'] ?? 30);
+        $newBlockingMin = (int)($_POST['blocking_threshold_min'] ?? THRESHOLD_BLOCKING_THRESHOLD_MIN);
         
         $newSettings = [
             'cpu_threshold' => $newCpu,
@@ -42,7 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'recompile_threshold' => $newRecomp,
             'signal_wait_pct' => $newSignalWait,
             'index_frag_pct' => $newIndexFrag,
-            'retention_days' => $newRetention
+            'retention_days' => $newRetention,
+            'blocking_threshold_min' => $newBlockingMin
         ];
         
         // Write to settings.json
@@ -58,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $signalWait = $newSignalWait;
             $indexFrag = $newIndexFrag;
             $retention = $newRetention;
+            $blockingMin = $newBlockingMin;
         } else {
             $error = 'Failed to write configurations to settings file. Verify file permissions.';
         }
@@ -137,6 +141,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Rebuild recommendation triggers if fragmentation equals or exceeds this limit.</small>
         </div>
         
+        <div class="form-group" style="grid-column: span 2; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
+            <label for="blocking_threshold_min">Blocking Alert Threshold (Minutes)</label>
+            <input type="number" id="blocking_threshold_min" name="blocking_threshold_min" value="<?= $blockingMin ?>" class="no-icon-input" style="max-width: 300px;" required min="1">
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Only block chains lasting longer than this limit will be recorded for historical analysis. Short/intermittent blocks will be ignored.</small>
+        </div>
+
         <div class="form-group" style="grid-column: span 2; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
             <label for="retention_days">Data Store Retention Duration (Days)</label>
             <input type="number" id="retention_days" name="retention_days" value="<?= $retention ?>" class="no-icon-input" style="max-width: 300px;" required>

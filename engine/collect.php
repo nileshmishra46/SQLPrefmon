@@ -38,11 +38,13 @@ if (!file_exists(dirname($logFile))) {
     mkdir(dirname($logFile), 0755, true);
 }
 
-function writeLog($message) {
-    global $logFile;
-    $logMsg = "[" . date('Y-m-d H:i:s') . "] " . $message . PHP_EOL;
-    file_put_contents($logFile, $logMsg, FILE_APPEND);
-    echo $logMsg;
+if (!function_exists('writeLog')) {
+    function writeLog($message) {
+        global $logFile;
+        $logMsg = "[" . date('Y-m-d H:i:s') . "] " . $message . PHP_EOL;
+        file_put_contents($logFile, $logMsg, FILE_APPEND);
+        echo $logMsg;
+    }
 }
 
 writeLog("--- Starting Performance Metrics Collection Run ---");
@@ -135,7 +137,9 @@ foreach ($servers as $srv) {
                     'cpu' => rand(50000, 150000),
                     'elapsed' => rand(70000, 200000),
                     'reads' => rand(1500000, 4500000), // triggers logical reads rule
-                    'execs' => rand(500, 3000)
+                    'execs' => rand(500, 3000),
+                    'parameters' => '{"@State": "\'NY\'"}',
+                    'query_plan' => '<?xml version="1.0" encoding="utf-16"?><ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.5" Build="16.0.1000.6"><BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT s.SaleId, s.SaleDate, c.CustomerName, p.ProductName FROM Sales s INNER JOIN Customers c ON s.CustomerId = c.CustomerId INNER JOIN Products p ON s.ProductId = p.ProductId WHERE c.State = \'NY\' ORDER BY s.SaleDate DESC" StatementId="1" StatementCompId="1" StatementType="SELECT" RetrValueSize="0" StatementOptmLevel="FULL" QueryHash="0x8A2C345F" QueryPlanHash="0x2B4A9C1D"><StatementParameters><ParameterList><ColumnReference Column="@State" ParameterCompiledValue="\'NY\'" /></ParameterList></StatementParameters><QueryPlan DegreeOfParallelism="2" MemoryGrant="1024" UsePlan="false"><RelOp NodeId="0" PhysicalOp="Sort" LogicalOp="Sort" EstimateRows="120" EstimateIO="0.012" EstimateCPU="0.085" AvgRowSize="80" EstimatedTotalSubtreeCost="0.25"><Sort Distinct="false"><OrderBy><ColumnReference Database="[Production_DB]" Schema="[dbo]" Table="[Sales]" Alias="[s]" Column="[SaleDate]" Descending="true" /></OrderBy></Sort></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>'
                 ],
                 [
                     'hash' => '0x3F9D821A',
@@ -144,7 +148,9 @@ foreach ($servers as $srv) {
                     'cpu' => rand(2000, 15000),
                     'elapsed' => rand(5500, 25000), // triggers slow run rule (> 5s avg)
                     'reads' => rand(20000, 80000),
-                    'execs' => rand(2, 5)
+                    'execs' => rand(2, 5),
+                    'parameters' => null,
+                    'query_plan' => '<?xml version="1.0" encoding="utf-16"?><ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.5" Build="16.0.1000.6"><BatchSequence><Batch><Statements><StmtSimple StatementText="SELECT COUNT(*), OrderStatus FROM Orders GROUP BY OrderStatus HAVING COUNT(*) &gt; 100" StatementId="1" StatementCompId="1" StatementType="SELECT" QueryHash="0x3F9D821A"><QueryPlan DegreeOfParallelism="1" MemoryGrant="512"><RelOp NodeId="0" PhysicalOp="Hash Match" LogicalOp="Aggregate" EstimateRows="5" EstimateIO="0" EstimateCPU="0.005"><HashKeysBuild><ColumnReference Database="[Production_DB]" Schema="[dbo]" Table="[Orders]" Column="[OrderStatus]" /></HashKeysBuild></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>'
                 ],
                 [
                     'hash' => '0xAB94C27D',
@@ -153,7 +159,9 @@ foreach ($servers as $srv) {
                     'cpu' => rand(1500, 5000),
                     'elapsed' => rand(2000, 6000),
                     'reads' => rand(100, 500),
-                    'execs' => rand(8000, 15000)
+                    'execs' => rand(8000, 15000),
+                    'parameters' => '{"@1": "1004"}',
+                    'query_plan' => '<?xml version="1.0" encoding="utf-16"?><ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.5" Build="16.0.1000.6"><BatchSequence><Batch><Statements><StmtSimple StatementText="UPDATE EmployeeProfile SET LastActiveDate = GETDATE() WHERE EmployeeId = @1" StatementId="1" StatementCompId="1" StatementType="UPDATE" QueryHash="0xAB94C27D"><StatementParameters><ParameterList><ColumnReference Column="@1" ParameterCompiledValue="1004" /></ParameterList></StatementParameters><QueryPlan DegreeOfParallelism="1" MemoryGrant="0"><RelOp NodeId="0" PhysicalOp="Clustered Index Update" LogicalOp="Update" EstimateRows="1"><Update><Object Database="[HR_Portal]" Schema="[dbo]" Table="[EmployeeProfile]" Index="[PK_EmployeeProfile]" /></Update></RelOp></QueryPlan></StmtSimple></Statements></Batch></BatchSequence></ShowPlanXML>'
                 ]
             ];
             
@@ -161,8 +169,9 @@ foreach ($servers as $srv) {
                 INSERT INTO top_queries (
                     server_id, collected_at, query_hash, query_text, database_name, 
                     total_cpu_ms, total_elapsed_ms, total_logical_reads, execution_count, 
-                    avg_cpu_ms, avg_elapsed_ms, avg_logical_reads, missing_index_hint
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    avg_cpu_ms, avg_elapsed_ms, avg_logical_reads, missing_index_hint,
+                    query_plan, parameters
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             foreach ($mockQueries as $q) {
                 $avgCpu = $q['cpu'] / $q['execs'];
@@ -173,7 +182,8 @@ foreach ($servers as $srv) {
                 $stmtQuery->execute([
                     $serverId, $timestamp, $q['hash'], $q['text'], $q['db'], 
                     $q['cpu'], $q['elapsed'], $q['reads'], $q['execs'], 
-                    $avgCpu, $avgElapsed, $avgReads, $hint
+                    $avgCpu, $avgElapsed, $avgReads, $hint,
+                    $q['query_plan'], $q['parameters']
                 ]);
             }
             
@@ -238,6 +248,92 @@ foreach ($servers as $srv) {
                 ]);
             }
             
+            // Generate simulated blocking events (30% probability)
+            if (rand(1, 10) > 7) {
+                $mockBlocks = [
+                    [
+                        'blocked_id' => 54,
+                        'blocked_sql' => "UPDATE Inventory \nSET Quantity = Quantity - 1 \nWHERE ProductId = 104",
+                        'blocking_id' => 43,
+                        'blocking_sql' => "BEGIN TRANSACTION;\nUPDATE Inventory \nSET Quantity = 50 \nWHERE ProductId = 104;\n-- (Blocker idle in open transaction)",
+                        'wait_time' => rand(125000, 310000), // 2.08 to 5.16 minutes
+                        'wait_type' => 'LCK_M_U',
+                        'resource' => 'KEY: 5:72057594043203584 (ad1092e0df8a)'
+                    ],
+                    [
+                        'blocked_id' => 76,
+                        'blocked_sql' => "SELECT SUM(TotalAmount) \nFROM Orders \nWHERE CustomerId = @1",
+                        'blocking_id' => 61,
+                        'blocking_sql' => "UPDATE Orders \nSET OrderStatus = 'Processing', TotalAmount = TotalAmount * 1.05 \nWHERE OrderStatus = 'Pending'",
+                        'wait_time' => rand(150000, 240000), // 2.5 to 4 minutes
+                        'wait_type' => 'LCK_M_S',
+                        'resource' => 'OBJECT: 5:24483842:0'
+                    ]
+                ];
+                
+                $stmtCheck = $db->prepare("
+                    SELECT id, collected_at, wait_time_ms 
+                    FROM blocking_history 
+                    WHERE server_id = ? 
+                      AND blocked_session_id = ? 
+                      AND blocking_session_id = ? 
+                      AND blocked_sql = ? 
+                      AND blocking_sql = ?
+                    ORDER BY collected_at DESC LIMIT 1
+                ");
+                
+                $stmtUpdate = $db->prepare("
+                    UPDATE blocking_history 
+                    SET wait_time_ms = ?, collected_at = ? 
+                    WHERE id = ?
+                ");
+                
+                $stmtBlockInsert = $db->prepare("
+                    INSERT INTO blocking_history (
+                        server_id, collected_at, blocked_session_id, blocked_sql, 
+                        blocking_session_id, blocking_sql, wait_time_ms, wait_type, resource_description
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                
+                $blocksCount = rand(1, 2);
+                $updatedCount = 0;
+                $insertedCount = 0;
+                
+                for ($i = 0; $i < $blocksCount; $i++) {
+                    $b = $mockBlocks[$i];
+                    
+                    $stmtCheck->execute([
+                        $serverId, $b['blocked_id'], $b['blocking_id'], $b['blocked_sql'], $b['blocking_sql']
+                    ]);
+                    $existing = $stmtCheck->fetch();
+                    
+                    $isSameBlock = false;
+                    if ($existing) {
+                        $lastCollectedTime = strtotime($existing['collected_at']);
+                        $currentTime = strtotime($timestamp);
+                        $timeDiffSec = $currentTime - $lastCollectedTime;
+                        if ($timeDiffSec > 0 && $timeDiffSec <= 900) {
+                            $isSameBlock = true;
+                        }
+                    }
+                    
+                    if ($isSameBlock) {
+                        // Increment wait time to simulate progress of block duration
+                        $newWaitTime = $existing['wait_time_ms'] + rand(30000, 60000); 
+                        $stmtUpdate->execute([$newWaitTime, $timestamp, $existing['id']]);
+                        $updatedCount++;
+                    } else {
+                        $stmtBlockInsert->execute([
+                            $serverId, $timestamp, $b['blocked_id'], $b['blocked_sql'],
+                            $b['blocking_id'], $b['blocking_sql'], $b['wait_time'],
+                            $b['wait_type'], $b['resource']
+                        ]);
+                        $insertedCount++;
+                    }
+                }
+                writeLog("Populated simulated lock blocking events: $updatedCount updated, $insertedCount newly inserted.");
+            }
+
             $db->commit();
             $status = 'online';
             writeLog("Successfully populated simulated metrics.");
@@ -392,18 +488,108 @@ foreach ($servers as $srv) {
                     INSERT INTO top_queries (
                         server_id, collected_at, query_hash, query_text, database_name, 
                         total_cpu_ms, total_elapsed_ms, total_logical_reads, execution_count, 
-                        avg_cpu_ms, avg_elapsed_ms, avg_logical_reads, missing_index_hint
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        avg_cpu_ms, avg_elapsed_ms, avg_logical_reads, missing_index_hint,
+                        query_plan, parameters
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 foreach ($qList as $q) {
+                    $extractedParams = null;
+                    if (!empty($q['query_plan'])) {
+                        $extractedParams = extractParametersFromPlan($q['query_plan']);
+                    }
+                    
                     $stmtQ->execute([
                         $serverId, $timestamp, $q['query_hash'], $q['query_text'], $q['database_name'] ?? 'master',
                         $q['total_cpu_ms'], $q['total_elapsed_ms'], $q['total_logical_reads'], $q['execution_count'],
-                        $q['avg_cpu_ms'], $q['avg_elapsed_ms'], $q['avg_logical_reads'], null
+                        $q['avg_cpu_ms'], $q['avg_elapsed_ms'], $q['avg_logical_reads'], null,
+                        $q['query_plan'] ?? null, $extractedParams
                     ]);
                 }
             } catch (Exception $e) {
                 writeLog("WARN: Failed to collect top queries: " . $e->getMessage());
+            }
+
+            // 6b. Query blocking history
+            try {
+                writeLog("Checking for active blocked sessions...");
+                $blockingThresholdMin = getAppSetting('blocking_threshold_min', THRESHOLD_BLOCKING_THRESHOLD_MIN);
+                $blockingThresholdMs = $blockingThresholdMin * 60 * 1000;
+                
+                $blockStmt = $conn->prepare(SQL_QUERY_BLOCKING);
+                $blockStmt->bindValue(1, $blockingThresholdMs, PDO::PARAM_INT);
+                $blockStmt->execute();
+                $blockedSessions = $blockStmt->fetchAll();
+                
+                if (!empty($blockedSessions)) {
+                    writeLog("Found " . count($blockedSessions) . " blocked session(s) active for longer than $blockingThresholdMin min.");
+                    
+                    $stmtCheck = $db->prepare("
+                        SELECT id, collected_at, wait_time_ms 
+                        FROM blocking_history 
+                        WHERE server_id = ? 
+                          AND blocked_session_id = ? 
+                          AND blocking_session_id = ? 
+                          AND blocked_sql = ? 
+                          AND blocking_sql = ?
+                        ORDER BY collected_at DESC LIMIT 1
+                    ");
+                    
+                    $stmtUpdate = $db->prepare("
+                        UPDATE blocking_history 
+                        SET wait_time_ms = ?, collected_at = ? 
+                        WHERE id = ?
+                    ");
+                    
+                    $stmtInsert = $db->prepare("
+                        INSERT INTO blocking_history (
+                            server_id, collected_at, blocked_session_id, blocked_sql, 
+                            blocking_session_id, blocking_sql, wait_time_ms, wait_type, resource_description
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    $updatedCount = 0;
+                    $insertedCount = 0;
+                    
+                    foreach ($blockedSessions as $bs) {
+                        $stmtCheck->execute([
+                            $serverId, 
+                            $bs['blocked_session_id'], 
+                            $bs['blocking_session_id'], 
+                            $bs['blocked_sql'], 
+                            $bs['blocking_sql']
+                        ]);
+                        $existing = $stmtCheck->fetch();
+                        
+                        $isSameBlock = false;
+                        if ($existing) {
+                            $lastCollectedTime = strtotime($existing['collected_at']);
+                            $currentTime = strtotime($timestamp);
+                            $timeDiffSec = $currentTime - $lastCollectedTime;
+                            
+                            // If last captured block was within 15 minutes, treat it as the same active block
+                            if ($timeDiffSec > 0 && $timeDiffSec <= 900) {
+                                $isSameBlock = true;
+                            }
+                        }
+                        
+                        if ($isSameBlock) {
+                            $stmtUpdate->execute([$bs['wait_time_ms'], $timestamp, $existing['id']]);
+                            $updatedCount++;
+                        } else {
+                            $stmtInsert->execute([
+                                $serverId, $timestamp, $bs['blocked_session_id'], $bs['blocked_sql'],
+                                $bs['blocking_session_id'], $bs['blocking_sql'], $bs['wait_time_ms'],
+                                $bs['wait_type'], $bs['resource_description']
+                            ]);
+                            $insertedCount++;
+                        }
+                    }
+                    writeLog("Blocking tracking complete: $updatedCount updated, $insertedCount newly inserted.");
+                } else {
+                    writeLog("No long-running blocked sessions found.");
+                }
+            } catch (Exception $e) {
+                writeLog("WARN: Failed to collect blocking details: " . $e->getMessage());
             }
             
             // 7. Query Global Missing Indexes
@@ -533,7 +719,11 @@ try {
     $p4->execute([$purgeDate]);
     $c4 = $p4->rowCount();
     
-    writeLog("Purge complete. Records deleted: snapshots ($c1), waits ($c2), queries ($c3), indexes ($c4).");
+    $p5 = $db->prepare("DELETE FROM blocking_history WHERE collected_at < ?");
+    $p5->execute([$purgeDate]);
+    $c5 = $p5->rowCount();
+    
+    writeLog("Purge complete. Records deleted: snapshots ($c1), waits ($c2), queries ($c3), indexes ($c4), blocks ($c5).");
 } catch (Exception $e) {
     writeLog("WARN: Purge process failed: " . $e->getMessage());
 }

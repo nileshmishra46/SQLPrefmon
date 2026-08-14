@@ -248,7 +248,11 @@ if ($latest) {
         <!-- Tab: Expensive Queries -->
         <div id="tab-queries" class="tab-pane">
             <div class="glass-card">
-                <h3 style="margin-bottom: 1rem;">Top Expensive Cached Statements</h3>
+                <h3 style="margin-bottom: 0.25rem;">Top Expensive Cached Statements</h3>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.25rem;">
+                    <i class="fa-solid fa-circle-info" style="color: var(--color-info);"></i> 
+                    <span>Click on any SQL statement row to view execution plan, parameters, and historical performance charts.</span>
+                </p>
                 <div class="table-responsive" style="margin-top: 0;">
                     <table class="custom-table">
                         <thead>
@@ -269,7 +273,7 @@ if ($latest) {
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($queries as $q): ?>
-                                    <tr>
+                                    <tr class="query-row" style="cursor: pointer;" onclick="toggleQueryDetail(<?= $q['id'] ?>, '<?= sanitize($q['query_hash']) ?>', <?= $serverId ?>)" title="Click to expand query details">
                                         <td><span class="badge badge-info"><?= sanitize($q['database_name']) ?></span></td>
                                         <td>
                                             <pre style="margin: 0; color: #a5d6ff; font-family: monospace; font-size: 0.8rem; max-width: 450px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 80px; overflow-y: auto;"><?= sanitize($q['query_text']) ?></pre>
@@ -279,6 +283,71 @@ if ($latest) {
                                         <td style="text-align: right; font-family: monospace;"><?= number_format($q['total_logical_reads']) ?></td>
                                         <td style="text-align: right; font-family: monospace;"><?= (int)$q['execution_count'] ?></td>
                                         <td style="text-align: right; font-family: monospace; font-weight: 600; color: var(--color-warning);"><?= number_format($q['avg_cpu_ms'], 2) ?></td>
+                                    </tr>
+                                    <!-- Collapsible Detail Drawer Row -->
+                                    <tr id="query-detail-row-<?= $q['id'] ?>" class="query-detail-row" style="display: none; background-color: rgba(0, 0, 0, 0.25);">
+                                        <td colspan="7">
+                                            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                                                <div class="grid-2" style="grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem;">
+                                                    <!-- Left: SQL Query code block -->
+                                                    <div>
+                                                        <h4 style="margin-bottom: 0.5rem; color: var(--color-primary); font-size: 0.95rem; font-weight: 600;">SQL Statement Text</h4>
+                                                        <div class="recommendation-fix-box" style="margin-top: 0; max-height: 250px; overflow-y: auto; background-color: #050b14; border: 1px solid rgba(255,255,255,0.08);">
+                                                            <pre id="query-text-<?= $q['id'] ?>" style="color: #c9d1d9;"><?= sanitize($q['query_text']) ?></pre>
+                                                            <button class="copy-btn" onclick="copyQueryText(<?= $q['id'] ?>); event.stopPropagation();">
+                                                                <i class="fa-regular fa-copy"></i> Copy SQL
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Right: Plan & Parameters -->
+                                                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                                        <h4 style="margin-bottom: 0.5rem; color: var(--color-warning); font-size: 0.95rem; font-weight: 600;">Execution Plan & Parameters</h4>
+                                                        <div class="glass-card" style="padding: 1.25rem; border-radius: 8px; background-color: rgba(17, 24, 39, 0.4); border: 1px solid var(--border-glass);">
+                                                            <div style="margin-bottom: 1rem;">
+                                                                <span style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Query Hash Identifier:</span>
+                                                                <code style="font-size: 0.85rem; color: var(--color-info);"><?= sanitize($q['query_hash']) ?></code>
+                                                            </div>
+                                                            <div style="margin-bottom: 1rem;">
+                                                                <span style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">Compiled Execution Parameters:</span>
+                                                                <?php 
+                                                                $params = !empty($q['parameters']) ? json_decode($q['parameters'], true) : null;
+                                                                if ($params): 
+                                                                ?>
+                                                                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.75rem; font-size: 0.85rem; background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                                                        <?php foreach ($params as $pName => $pVal): ?>
+                                                                            <span style="color: var(--color-warning); font-family: monospace; font-weight: 600;"><?= sanitize($pName) ?>:</span>
+                                                                            <span style="color: var(--text-primary); font-family: monospace; word-break: break-all;"><?= sanitize($pVal) ?></span>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                <?php else: ?>
+                                                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No compiled parameter bindings cached.</span>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                            <div>
+                                                                <?php if (!empty($q['query_plan'])): ?>
+                                                                    <a href="download_plan.php?id=<?= $q['id'] ?>" class="btn btn-secondary btn-block" style="font-size: 0.85rem; padding: 0.5rem 1rem;" onclick="event.stopPropagation();">
+                                                                        <i class="fa-solid fa-download"></i> Download .sqlplan
+                                                                    </a>
+                                                                <?php else: ?>
+                                                                    <button class="btn btn-secondary btn-block" disabled style="font-size: 0.85rem; padding: 0.5rem 1rem; opacity: 0.5;" onclick="event.stopPropagation();">
+                                                                        <i class="fa-solid fa-ban"></i> Plan Not Collected
+                                                                    </button>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <!-- Historical Trends Chart -->
+                                                <div>
+                                                    <h4 style="margin-bottom: 0.5rem; color: var(--color-info); font-size: 0.95rem; font-weight: 600;">Query Performance Historical Analysis</h4>
+                                                    <div class="glass-card" style="padding: 1.25rem; border-radius: 8px; background-color: rgba(17, 24, 39, 0.4); border: 1px solid var(--border-glass);">
+                                                        <div style="height: 180px; position: relative;">
+                                                            <canvas id="query-history-chart-<?= $q['id'] ?>"></canvas>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -514,6 +583,105 @@ if ($latest) {
             });
         }
     });
+    
+    function copyQueryText(id) {
+        const text = document.getElementById('query-text-' + id).innerText;
+        navigator.clipboard.writeText(text).then(function() {
+            const btn = document.querySelector('#query-detail-row-' + id + ' .copy-btn');
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+            setTimeout(() => { btn.innerHTML = origText; }, 2000);
+        });
+    }
+
+    const queryCharts = {};
+
+    function toggleQueryDetail(id, hash, serverId) {
+        const detailRow = document.getElementById('query-detail-row-' + id);
+        const isVisible = detailRow.style.display !== 'none';
+        
+        // Close other open query rows
+        document.querySelectorAll('.query-detail-row').forEach(row => {
+            row.style.display = 'none';
+        });
+        
+        if (!isVisible) {
+            detailRow.style.display = 'table-row';
+            
+            // Load query history chart if not already initialized
+            if (!queryCharts[id]) {
+                fetch(`../api/query_history.php?server_id=${serverId}&hash=${encodeURIComponent(hash)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) {
+                            console.error(data.error);
+                            return;
+                        }
+                        
+                        const ctx = document.getElementById('query-history-chart-' + id).getContext('2d');
+                        queryCharts[id] = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: data.timestamps,
+                                datasets: [
+                                    {
+                                        label: 'Avg Duration (ms)',
+                                        data: data.avg_duration,
+                                        borderColor: '#ffaa44',
+                                        backgroundColor: 'rgba(255,170,68,0.05)',
+                                        borderWidth: 2,
+                                        tension: 0.25,
+                                        yAxisID: 'y'
+                                    },
+                                    {
+                                        label: 'Avg CPU (ms)',
+                                        data: data.avg_cpu,
+                                        borderColor: '#0088ff',
+                                        backgroundColor: 'rgba(0,136,255,0.05)',
+                                        borderWidth: 2,
+                                        tension: 0.25,
+                                        yAxisID: 'y1'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        labels: { color: '#9ca3af', font: { family: 'Inter', size: 10 } }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        grid: { color: 'rgba(255,255,255,0.03)' },
+                                        ticks: { color: '#9ca3af', font: { family: 'Inter', size: 9 } }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        grid: { color: 'rgba(255,255,255,0.03)' },
+                                        ticks: { color: '#9ca3af', font: { family: 'Inter', size: 9 } },
+                                        title: { display: true, text: 'Duration (ms)', color: '#ffaa44', font: { family: 'Inter', size: 9 } }
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        grid: { drawOnChartArea: false },
+                                        ticks: { color: '#9ca3af', font: { family: 'Inter', size: 9 } },
+                                        title: { display: true, text: 'CPU (ms)', color: '#0088ff', font: { family: 'Inter', size: 9 } }
+                                    }
+                                }
+                            }
+                        });
+                    });
+            }
+        } else {
+            detailRow.style.display = 'none';
+        }
+    }
     </script>
 <?php endif; ?>
 

@@ -101,9 +101,11 @@ define('SQL_QUERY_TOP_QUERIES', "
         qs.execution_count,
         (qs.total_worker_time / 1000.0) / qs.execution_count AS avg_cpu_ms,
         (qs.total_elapsed_time / 1000.0) / qs.execution_count AS avg_elapsed_ms,
-        (qs.total_logical_reads * 1.0) / qs.execution_count AS avg_logical_reads
+        (qs.total_logical_reads * 1.0) / qs.execution_count AS avg_logical_reads,
+        CAST(qp.query_plan AS NVARCHAR(MAX)) AS query_plan
     FROM sys.dm_exec_query_stats qs
     CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+    OUTER APPLY sys.dm_exec_query_plan(qs.plan_handle) qp
     ORDER BY qs.total_worker_time DESC;
 ");
 
@@ -138,4 +140,30 @@ define('SQL_QUERY_DATABASES', "
     FROM sys.databases 
     WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb', 'Resource') 
     AND state_desc = 'ONLINE';
+");
+
+// 9. Detailed Blocking Query (Retrieves blocked and blocking session SQL statements & wait details)
+define('SQL_QUERY_BLOCKING', "
+    SELECT 
+        r.session_id AS blocked_session_id,
+        r.blocking_session_id AS blocking_session_id,
+        r.wait_time AS wait_time_ms,
+        r.wait_type AS wait_type,
+        r.wait_resource AS resource_description,
+        SUBSTRING(st_blocked.text, (r.statement_start_offset/2)+1, 
+            ((CASE r.statement_end_offset 
+                WHEN -1 THEN DATALENGTH(st_blocked.text) 
+                ELSE r.statement_end_offset 
+              END - r.statement_start_offset)/2) + 1) AS blocked_sql,
+        ISNULL(st_blocking.text, '(Idle Transaction or Blocker SQL unavailable)') AS blocking_sql
+    FROM sys.dm_exec_requests r
+    CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) st_blocked
+    OUTER APPLY (
+        SELECT TOP 1 st_b.text
+        FROM sys.dm_exec_connections conn_b
+        CROSS APPLY sys.dm_exec_sql_text(conn_b.most_recent_sql_handle) st_b
+        WHERE conn_b.session_id = r.blocking_session_id
+    ) st_blocking
+    WHERE r.blocking_session_id <> 0 
+    AND r.wait_time >= CAST(? AS INT);
 ");

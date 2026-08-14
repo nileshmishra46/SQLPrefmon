@@ -34,6 +34,38 @@ function getDbConnection() {
                 } catch (PDOException $e) {
                     // Column already exists, safe to ignore
                 }
+                
+                // Add query_plan column to top_queries if missing
+                try {
+                    $db->exec("ALTER TABLE top_queries ADD COLUMN query_plan TEXT");
+                } catch (PDOException $e) {
+                    // Column already exists, safe to ignore
+                }
+                
+                // Add parameters column to top_queries if missing
+                try {
+                    $db->exec("ALTER TABLE top_queries ADD COLUMN parameters TEXT");
+                } catch (PDOException $e) {
+                    // Column already exists, safe to ignore
+                }
+
+                // Add blocking_history table if missing
+                try {
+                    $db->exec("CREATE TABLE IF NOT EXISTS blocking_history (
+                        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                        server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        blocked_session_id  INTEGER,
+                        blocked_sql         TEXT,
+                        blocking_session_id INTEGER,
+                        blocking_sql        TEXT,
+                        wait_time_ms        INTEGER,
+                        wait_type           TEXT,
+                        resource_description TEXT
+                    )");
+                } catch (PDOException $e) {
+                    // Safe to ignore
+                }
             }
         } catch (PDOException $e) {
             die("Database Connection Error: " . $e->getMessage());
@@ -121,7 +153,9 @@ function initializeSchema(PDO $db) {
         avg_cpu_ms          REAL,
         avg_elapsed_ms      REAL,
         avg_logical_reads   REAL,
-        missing_index_hint  TEXT
+        missing_index_hint  TEXT,
+        query_plan          TEXT,
+        parameters          TEXT
     )");
     
     // 6. Index stats table
@@ -168,6 +202,20 @@ function initializeSchema(PDO $db) {
         detail      TEXT,
         ip_address  TEXT,
         logged_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    // 10. Blocking history table
+    $db->exec("CREATE TABLE IF NOT EXISTS blocking_history (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        blocked_session_id  INTEGER,
+        blocked_sql         TEXT,
+        blocking_session_id INTEGER,
+        blocking_sql        TEXT,
+        wait_time_ms        INTEGER,
+        wait_type           TEXT,
+        resource_description TEXT
     )");
     
     // 9. Seeding initial Administrator user

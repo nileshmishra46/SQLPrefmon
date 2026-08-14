@@ -155,4 +155,59 @@ function getAppSetting($key, $default) {
     }
     return isset($settings[$key]) ? $settings[$key] : $default;
 }
+
+/**
+ * Extracts parameter names and compiled values from SQL Server query plan XML.
+ * 
+ * @param string $xmlContent
+ * @return string|null JSON string of parameters or null
+ */
+function extractParametersFromPlan($xmlContent) {
+    if (empty($xmlContent)) {
+        return null;
+    }
+    
+    $params = [];
+    try {
+        $xml = @simplexml_load_string($xmlContent);
+        if ($xml === false) {
+            return extractParametersWithRegex($xmlContent);
+        }
+        
+        $xml->registerXPathNamespace('sp', 'http://schemas.microsoft.com/sqlserver/2004/07/showplan');
+        $nodes = $xml->xpath('//sp:ParameterList/sp:ColumnReference');
+        if ($nodes) {
+            foreach ($nodes as $node) {
+                $name = (string)$node['Column'];
+                $val = (string)$node['ParameterCompiledValue'];
+                $params[$name] = $val;
+            }
+        }
+    } catch (Exception $e) {
+        return extractParametersWithRegex($xmlContent);
+    }
+    
+    return !empty($params) ? json_encode($params) : null;
+}
+
+/**
+ * Fallback parameter extraction using regular expressions if SimpleXML parsing fails.
+ * 
+ * @param string $xmlContent
+ * @return string|null JSON string of parameters or null
+ */
+function extractParametersWithRegex($xmlContent) {
+    if (empty($xmlContent)) {
+        return null;
+    }
+    
+    $params = [];
+    preg_match_all('/Column="([^"]+)"[^>]*ParameterCompiledValue="([^"]*)"/', $xmlContent, $matches, PREG_SET_ORDER);
+    if (!empty($matches)) {
+        foreach ($matches as $match) {
+            $params[$match[1]] = $match[2];
+        }
+    }
+    return !empty($params) ? json_encode($params) : null;
+}
 ?>
