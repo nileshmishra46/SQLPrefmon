@@ -17,29 +17,29 @@ Here are some screenshots showcasing the SQLPrefmon user interface:
 ![Dashboard Summary](assets/screenshots/screenshot1.png)
 *Real-time monitoring status of all registered SQL Server instances.*
 
-### 2. Server Detail & Live Performance Counters
+### 2. Tunning Recommendations
 ![Server Detail](assets/screenshots/screenshot2.png)
-*Granular tracking of CPU, memory, Disk I/O, wait stats, and active connections.*
+*Server wise tunning recommendations. *
 
-### 3. Automated Tuning Advisor & Recommendations
+### 3. Historical Trends
 ![Tuning Recommendations](assets/screenshots/screenshot3.png)
-*Actionable suggestions with auto-generated T-SQL correction scripts to optimize performance.*
+*Historical trends.*
 
-### 4. Active Blocking & Deadlock Analysis
+### 4. Historical Trends with list of all the metrics
 ![Blocking History](assets/screenshots/screenshot4.png)
-*Real-time details of blocked sessions, blocking SQL statements, and lock types.*
+*Historical trends will be present for all the listed metrics.*
 
-### 5. High-Cost DMV Queries
+### 5. Captured sql statements along with execution plan
 ![Query Performance](assets/screenshots/screenshot5.png)
-*Identifies top expensive SQL queries ranked by CPU, reads, logical writes, and execution count.*
+*Captured SQL Statements along with downloadable execution plan for further analysis.*
 
-### 6. Instance Management Configuration
+### 6. Blocking Analysis
 ![Instance Management](assets/screenshots/screenshot6.png)
-*Add, edit, or remove SQL Server instances with secure AES-256 encrypted credential storage.*
+*Blocking analysis for selected server.*
 
-### 7. Global Advisor Settings
+### 7. Administrative settings
 ![Settings](assets/screenshots/screenshot7.png)
-*Customize monitoring alert and warning thresholds for CPU, disk latency, recompilations, and memory pressure.*
+*Administration configuration and user creation settings.*
 
 
 ---
