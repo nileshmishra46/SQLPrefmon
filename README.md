@@ -59,6 +59,18 @@ Here are some screenshots showcasing the SQLPrefmon user interface:
 
 ---
 
+## 🔮 Upcoming Features
+
+The following features are planned for future updates:
+
+1. **Deadlock Monitoring:** Real-time tracking and visualization of deadlock events, victim details, and contributing queries.
+2. **Backup Monitoring:** Audit database backup history (Full, Differential, Transaction Log) and generate alerts for stale or missing backups.
+3. **MDF and LDF Free Space Monitoring:** Proactive monitoring of database file growth, individual `.mdf` and `.ldf` file sizes, and warning alerts for low disk capacity.
+4. **Email Notifications:** Automatic alert routing via SMTP configuration for critical server status and performance issues.
+5. **Agent Job Failure Monitoring:** Detailed reporting of SQL Server Agent job statuses, failure alerts, and step-by-step error analysis.
+
+---
+
 ## 🛠️ Prerequisites & Requirements
 
 Ensure the monitoring server meets the following requirements:
