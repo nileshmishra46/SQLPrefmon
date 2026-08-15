@@ -11,19 +11,36 @@
 
 ## 📸 Screenshots
 
-*To showcase the UI in your GitHub repository, create the `assets/screenshots/` folder, save your images there, and uncomment/update the following image references:*
+Here are some screenshots showcasing the SQLPrefmon user interface:
 
-<!--
-### Dashboard Overview
-![Dashboard Summary](assets/screenshots/dashboard.png)
-*Real-time performance status, connection states, and active server counts.*
+### 1. Dashboard Overview
+![Dashboard Summary](assets/screenshots/screenshot1.png)
+*Real-time monitoring status of all registered SQL Server instances.*
 
-### Performance Recommendations
-![Tuning Recommendations](assets/screenshots/recommendations.png)
-*Actionable tuning recommendations with auto-generated SQL scripts to resolve issues.*
--->
+### 2. Server Detail & Live Performance Counters
+![Server Detail](assets/screenshots/screenshot2.png)
+*Granular tracking of CPU, memory, Disk I/O, wait stats, and active connections.*
 
-*(Placeholder - You can add your screenshots by placing them in `assets/screenshots/` and updating the paths above.)*
+### 3. Automated Tuning Advisor & Recommendations
+![Tuning Recommendations](assets/screenshots/screenshot3.png)
+*Actionable suggestions with auto-generated T-SQL correction scripts to optimize performance.*
+
+### 4. Active Blocking & Deadlock Analysis
+![Blocking History](assets/screenshots/screenshot4.png)
+*Real-time details of blocked sessions, blocking SQL statements, and lock types.*
+
+### 5. High-Cost DMV Queries
+![Query Performance](assets/screenshots/screenshot5.png)
+*Identifies top expensive SQL queries ranked by CPU, reads, logical writes, and execution count.*
+
+### 6. Instance Management Configuration
+![Instance Management](assets/screenshots/screenshot6.png)
+*Add, edit, or remove SQL Server instances with secure AES-256 encrypted credential storage.*
+
+### 7. Global Advisor Settings
+![Settings](assets/screenshots/screenshot7.png)
+*Customize monitoring alert and warning thresholds for CPU, disk latency, recompilations, and memory pressure.*
+
 
 ---
 
