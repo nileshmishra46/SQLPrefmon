@@ -58,6 +58,26 @@ function isLinkActive($page, $dir = null) {
                 <i class="fa-solid fa-ban"></i>
                 <span>Blocking Log</span>
             </a>
+
+            <a href="../history/deadlocks.php" class="nav-link <?= isLinkActive('deadlocks.php', 'history') ?>">
+                <i class="fa-solid fa-skull"></i>
+                <span>Deadlocks Log</span>
+            </a>
+
+            <a href="../history/db_files.php" class="nav-link <?= isLinkActive('db_files.php', 'history') ?>">
+                <i class="fa-solid fa-hard-drive"></i>
+                <span>DB File Analysis</span>
+            </a>
+
+            <a href="../history/backups.php" class="nav-link <?= isLinkActive('backups.php', 'history') ?>">
+                <i class="fa-solid fa-life-ring"></i>
+                <span>Backup Monitoring</span>
+            </a>
+
+            <a href="../alerts/index.php" class="nav-link <?= isLinkActive('index.php', 'alerts') ?>">
+                <i class="fa-solid fa-bell"></i>
+                <span>Alert Center</span>
+            </a>
         </div>
         
         <div class="nav-section">

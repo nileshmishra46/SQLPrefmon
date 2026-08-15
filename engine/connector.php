@@ -34,7 +34,7 @@ function getSqlServerConnection($hostname, $port = 1433, $instanceName = null, $
     
     foreach ($drivers as $driver) {
         try {
-            $dsn = "odbc:Driver={" . $driver . "};Server=" . $serverStr . ";Database=master;";
+            $dsn = "odbc:Driver={" . $driver . "};Server=" . $serverStr . ";Database=master;MARS_Connection=yes;";
             
             if ($trustServerCert) {
                 $dsn .= "TrustServerCertificate=yes;";

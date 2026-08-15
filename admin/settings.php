@@ -12,6 +12,29 @@ $settingsPath = dirname(__DIR__) . '/config/settings.json';
 $error = '';
 $success = '';
 
+// Check connection health of current active repository database
+$repoStatus = 'Offline';
+$repoInfo = '';
+$statusClass = 'badge-danger';
+try {
+    $activeDb = getDbConnection();
+    if ($activeDb instanceof PrefmonPDO) {
+        $dbType = $activeDb->getDbType();
+        if ($dbType === 'mssql') {
+            $repoStatus = 'Active & Online';
+            $statusClass = 'badge-success';
+            $repoInfo = getAppSetting('repo_mssql_db', 'PrefmonRepo') . ' on ' . getAppSetting('repo_mssql_host', 'localhost') . ':' . getAppSetting('repo_mssql_port', '1433');
+        } else {
+            $repoStatus = 'Active & Online';
+            $statusClass = 'badge-success';
+            $repoInfo = realpath(dirname(__DIR__) . '/data/monitor.db') ?: (dirname(__DIR__) . '/data/monitor.db');
+        }
+    }
+} catch (Exception $e) {
+    $repoStatus = 'Connection Error: ' . $e->getMessage();
+    $statusClass = 'badge-danger';
+}
+
 // Load current settings or use fallback defaults
 $cpu = getAppSetting('cpu_threshold', THRESHOLD_CPU_PCT);
 $ple = getAppSetting('ple_threshold', THRESHOLD_PLE_SEC);
@@ -21,6 +44,16 @@ $signalWait = getAppSetting('signal_wait_pct', THRESHOLD_SIGNAL_WAIT_PCT);
 $indexFrag = getAppSetting('index_frag_pct', THRESHOLD_INDEX_FRAG_PCT);
 $retention = getAppSetting('retention_days', 30);
 $blockingMin = getAppSetting('blocking_threshold_min', THRESHOLD_BLOCKING_THRESHOLD_MIN);
+$backupFull = getAppSetting('backup_full_threshold', 24);
+$backupDiff = getAppSetting('backup_diff_threshold', 24);
+$backupLog = getAppSetting('backup_log_threshold', 4);
+
+$repoType = getAppSetting('repo_db_type', 'sqlite');
+$repoHost = getAppSetting('repo_mssql_host', 'localhost');
+$repoPort = getAppSetting('repo_mssql_port', '1433');
+$repoDb = getAppSetting('repo_mssql_db', 'PrefmonRepo');
+$repoUser = getAppSetting('repo_mssql_user', 'sa');
+$repoPass = getAppSetting('repo_mssql_pass', '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $csrfToken = $_POST['csrf_token'] ?? '';
@@ -36,6 +69,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newIndexFrag = (float)($_POST['index_frag_pct'] ?? THRESHOLD_INDEX_FRAG_PCT);
         $newRetention = (int)($_POST['retention_days'] ?? 30);
         $newBlockingMin = (int)($_POST['blocking_threshold_min'] ?? THRESHOLD_BLOCKING_THRESHOLD_MIN);
+        $newBackupFull = (int)($_POST['backup_full_threshold'] ?? 24);
+        $newBackupDiff = (int)($_POST['backup_diff_threshold'] ?? 24);
+        $newBackupLog = (int)($_POST['backup_log_threshold'] ?? 4);
+
+        $newRepoType = $_POST['repo_db_type'] ?? 'sqlite';
+        $newRepoHost = $_POST['repo_mssql_host'] ?? 'localhost';
+        $newRepoPort = $_POST['repo_mssql_port'] ?? '1433';
+        $newRepoDb = $_POST['repo_mssql_db'] ?? 'PrefmonRepo';
+        $newRepoUser = $_POST['repo_mssql_user'] ?? 'sa';
+        $newRepoPass = $_POST['repo_mssql_pass'] ?? '';
+        
+        // If type changed or parameters are updated for mssql, validate connection
+        if ($newRepoType === 'mssql') {
+            try {
+                $testDsn = "odbc:Driver={ODBC Driver 18 for SQL Server};Server={$newRepoHost},{$newRepoPort};Database=master;Encrypt=yes;TrustServerCertificate=yes;ConnectionTimeout=3;";
+                $testDb = new PDO($testDsn, $newRepoUser, $newRepoPass, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+                ]);
+                $testDb = null;
+            } catch (PDOException $e) {
+                $error = 'Test connection to MSSQL Server failed: ' . $e->getMessage();
+            }
+        }
         
         $newSettings = [
             'cpu_threshold' => $newCpu,
@@ -45,7 +101,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'signal_wait_pct' => $newSignalWait,
             'index_frag_pct' => $newIndexFrag,
             'retention_days' => $newRetention,
-            'blocking_threshold_min' => $newBlockingMin
+            'blocking_threshold_min' => $newBlockingMin,
+            'backup_full_threshold' => $newBackupFull,
+            'backup_diff_threshold' => $newBackupDiff,
+            'backup_log_threshold' => $newBackupLog,
+            'repo_db_type' => $newRepoType,
+            'repo_mssql_host' => $newRepoHost,
+            'repo_mssql_port' => $newRepoPort,
+            'repo_mssql_db' => $newRepoDb,
+            'repo_mssql_user' => $newRepoUser,
+            'repo_mssql_pass' => $newRepoPass
         ];
         
         // Write to settings.json
@@ -62,6 +127,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $indexFrag = $newIndexFrag;
             $retention = $newRetention;
             $blockingMin = $newBlockingMin;
+            $backupFull = $newBackupFull;
+            $backupDiff = $newBackupDiff;
+            $backupLog = $newBackupLog;
+            $repoType = $newRepoType;
+            $repoHost = $newRepoHost;
+            $repoPort = $newRepoPort;
+            $repoDb = $newRepoDb;
+            $repoUser = $newRepoUser;
+            $repoPass = $newRepoPass;
         } else {
             $error = 'Failed to write configurations to settings file. Verify file permissions.';
         }
@@ -147,11 +221,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Only block chains lasting longer than this limit will be recorded for historical analysis. Short/intermittent blocks will be ignored.</small>
         </div>
 
+        <div class="form-group" style="grid-column: span 1; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
+            <label for="backup_full_threshold">Full Backup Overdue Limit (Hours)</label>
+            <input type="number" id="backup_full_threshold" name="backup_full_threshold" value="<?= $backupFull ?>" class="no-icon-input" required min="1">
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Raise an alert if a database has no Full Backup within this age.</small>
+        </div>
+
+        <div class="form-group" style="grid-column: span 1; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
+            <label for="backup_diff_threshold">Diff Backup Overdue Limit (Hours)</label>
+            <input type="number" id="backup_diff_threshold" name="backup_diff_threshold" value="<?= $backupDiff ?>" class="no-icon-input" required min="1">
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Raise an alert if a database has no Differential Backup within this age.</small>
+        </div>
+
+        <div class="form-group" style="grid-column: span 1; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
+            <label for="backup_log_threshold">Log Backup Overdue Limit (Hours)</label>
+            <input type="number" id="backup_log_threshold" name="backup_log_threshold" value="<?= $backupLog ?>" class="no-icon-input" required min="1">
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Raise an alert if a FULL recovery model database has no Log Backup within this age.</small>
+        </div>
+
         <div class="form-group" style="grid-column: span 2; border-top: 1px solid var(--border-glass); padding-top: 1.5rem;">
             <label for="retention_days">Data Store Retention Duration (Days)</label>
             <input type="number" id="retention_days" name="retention_days" value="<?= $retention ?>" class="no-icon-input" style="max-width: 300px;" required>
             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Snapshots and history metrics older than this number of days will be automatically deleted in background collection cycles.</small>
         </div>
+
+        <!-- Repository Database Backend Options -->
+        <div style="grid-column: span 2; border-top: 2px solid var(--border-glass); padding-top: 2rem; margin-top: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; color: var(--color-primary); display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-database"></i> Repository Storage Engine Settings</span>
+                <span class="db-badge <?= $statusClass ?>" style="font-size: 0.75rem; padding: 0.3rem 0.75rem; letter-spacing: 0.5px; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: <?= $statusClass === 'badge-success' ? '#10b981' : '#ef4444' ?>; box-shadow: 0 0 8px <?= $statusClass === 'badge-success' ? '#10b981' : '#ef4444' ?>;"></span>
+                    <?= $repoStatus ?>
+                </span>
+            </h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                Choose where to persist performance monitoring historical data. Switching engines requires manually seeding users if no sync utility is run.
+            </p>
+            
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; display: flex; gap: 0.5rem; align-items: center; font-size: 0.85rem;">
+                <i class="fa-solid fa-circle-info" style="color: var(--color-primary);"></i>
+                <span style="color: var(--text-secondary);">Current Active Data Store Location:</span>
+                <strong style="color: #ffffff; word-break: break-all;"><?= sanitize($repoInfo) ?></strong>
+            </div>
+        </div>
+
+        <div class="form-group" style="grid-column: span 2;">
+            <label for="repo_db_type">Repository Engine Type</label>
+            <select id="repo_db_type" name="repo_db_type" class="no-icon-input" onchange="toggleMssqlParams(this.value)">
+                <option value="sqlite" <?= $repoType === 'sqlite' ? 'selected' : '' ?>>Portable SQLite DB (Default, zero configuration)</option>
+                <option value="mssql" <?= $repoType === 'mssql' ? 'selected' : '' ?>>Microsoft SQL Server Database (Centralized repository storage)</option>
+            </select>
+        </div>
+
+        <div id="mssql_repo_fields" style="grid-column: span 2; display: <?= $repoType === 'mssql' ? 'grid' : 'none' ?>; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+            <div class="form-group">
+                <label for="repo_mssql_host">MSSQL Server IP / Hostname</label>
+                <input type="text" id="repo_mssql_host" name="repo_mssql_host" value="<?= sanitize($repoHost) ?>" class="no-icon-input">
+            </div>
+            <div class="form-group">
+                <label for="repo_mssql_port">Server Port</label>
+                <input type="text" id="repo_mssql_port" name="repo_mssql_port" value="<?= sanitize($repoPort) ?>" class="no-icon-input">
+            </div>
+            <div class="form-group">
+                <label for="repo_mssql_db">Repository Database Name</label>
+                <input type="text" id="repo_mssql_db" name="repo_mssql_db" value="<?= sanitize($repoDb) ?>" class="no-icon-input">
+                <small style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 0.25rem;">Database will be automatically created if it does not exist.</small>
+            </div>
+            <div class="form-group">
+                <label for="repo_mssql_user">SysAdmin Login Username</label>
+                <input type="text" id="repo_mssql_user" name="repo_mssql_user" value="<?= sanitize($repoUser) ?>" class="no-icon-input">
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label for="repo_mssql_pass">SysAdmin Password</label>
+                <input type="password" id="repo_mssql_pass" name="repo_mssql_pass" value="<?= sanitize($repoPass) ?>" class="no-icon-input" placeholder="••••••••">
+                <small style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 0.25rem;">Requires sysadmin privileges to create repository database, tables, and indexes.</small>
+            </div>
+        </div>
+
+        <script>
+        function toggleMssqlParams(val) {
+            const el = document.getElementById('mssql_repo_fields');
+            if (val === 'mssql') {
+                el.style.display = 'grid';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+        </script>
         
         <div style="grid-column: span 2; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
             <button type="submit" class="btn btn-primary btn-glow">

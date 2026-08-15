@@ -167,3 +167,128 @@ define('SQL_QUERY_BLOCKING', "
     WHERE r.blocking_session_id <> 0 
     AND r.wait_time >= CAST(? AS INT);
 ");
+
+// 10. Database MDF & LDF File Sizes and Free Space
+define('SQL_QUERY_DB_FILES', "
+DECLARE @db_name NVARCHAR(256);
+DECLARE @sql NVARCHAR(MAX);
+CREATE TABLE #FileStats (
+    database_name NVARCHAR(256),
+    file_name NVARCHAR(256),
+    file_type NVARCHAR(50),
+    physical_name NVARCHAR(512),
+    total_size_mb REAL,
+    used_space_mb REAL
+);
+
+DECLARE db_cursor CURSOR FOR
+SELECT name FROM sys.databases WHERE state_desc = 'ONLINE';
+
+OPEN db_cursor;
+FETCH NEXT FROM db_cursor INTO @db_name;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @sql = '
+    USE [' + REPLACE(@db_name, ']', ']]') + '];
+    INSERT INTO #FileStats (database_name, file_name, file_type, physical_name, total_size_mb, used_space_mb)
+    SELECT 
+        DB_NAME(),
+        name,
+        type_desc,
+        physical_name,
+        size * 8.0 / 1024.0,
+        CAST(FILEPROPERTY(name, ''SpaceUsed'') AS FLOAT) * 8.0 / 1024.0
+    FROM sys.database_files;';
+    
+    BEGIN TRY
+        EXEC(@sql);
+    END TRY
+    BEGIN CATCH
+        -- Ignore databases we cannot access
+    END CATCH
+
+    FETCH NEXT FROM db_cursor INTO @db_name;
+END;
+
+CLOSE db_cursor;
+DEALLOCATE db_cursor;
+
+SELECT 
+    database_name,
+    file_name,
+    file_type,
+    physical_name,
+    total_size_mb,
+    used_space_mb,
+    (total_size_mb - used_space_mb) AS free_space_mb,
+    CASE 
+        WHEN total_size_mb > 0 THEN ((total_size_mb - used_space_mb) / total_size_mb) * 100.0 
+        ELSE 0.0 
+    END AS free_space_pct
+FROM #FileStats;
+
+DROP TABLE #FileStats;
+");
+
+define("SQL_QUERY_DEADLOCKS", "
+SELECT 
+    CAST(event_data.value('(event/@timestamp)[1]', 'VARCHAR(100)') AS DATETIME) AS deadlock_time,
+    CAST(event_data.value('(event/data[@name=\"xml_report\"]/value)[1]', 'NVARCHAR(MAX)') AS NVARCHAR(MAX)) AS deadlock_graph
+FROM (
+    SELECT 
+        CAST(target_data AS XML) AS TargetData
+    FROM sys.dm_xe_session_targets st
+    JOIN sys.dm_xe_sessions s ON s.address = st.event_session_address
+    WHERE s.name = 'system_health'
+      AND st.target_name = 'ring_buffer'
+) AS TargetData
+CROSS APPLY TargetData.nodes('RingBufferTarget/event[@name=\"xml_deadlock_report\"]') AS XEvent(event_data)
+ORDER BY deadlock_time DESC;
+");
+
+define("SQL_QUERY_BACKUPS", "
+WITH LastFull AS (
+    SELECT 
+        database_name,
+        backup_finish_date AS full_backup_time,
+        (backup_size / 1024.0 / 1024.0) AS full_backup_size_mb,
+        ROW_NUMBER() OVER (PARTITION BY database_name ORDER BY backup_finish_date DESC) as rn
+    FROM msdb.dbo.backupset
+    WHERE type = 'D'
+),
+LastDiff AS (
+    SELECT 
+        database_name,
+        backup_finish_date AS diff_backup_time,
+        (backup_size / 1024.0 / 1024.0) AS diff_backup_size_mb,
+        ROW_NUMBER() OVER (PARTITION BY database_name ORDER BY backup_finish_date DESC) as rn
+    FROM msdb.dbo.backupset
+    WHERE type = 'I'
+),
+LastLog AS (
+    SELECT 
+        database_name,
+        backup_finish_date AS log_backup_time,
+        (backup_size / 1024.0 / 1024.0) AS log_backup_size_mb,
+        ROW_NUMBER() OVER (PARTITION BY database_name ORDER BY backup_finish_date DESC) as rn
+    FROM msdb.dbo.backupset
+    WHERE type = 'L'
+)
+SELECT 
+    d.name AS database_name,
+    d.recovery_model_desc AS recovery_model,
+    lf.full_backup_time,
+    lf.full_backup_size_mb,
+    ld.diff_backup_time,
+    ld.diff_backup_size_mb,
+    ll.log_backup_time,
+    ll.log_backup_size_mb
+FROM sys.databases d
+LEFT JOIN LastFull lf ON d.name = lf.database_name AND lf.rn = 1
+LEFT JOIN LastDiff ld ON d.name = ld.database_name AND ld.rn = 1
+LEFT JOIN LastLog ll ON d.name = ll.database_name AND ll.rn = 1
+WHERE d.name <> 'tempdb' AND d.state_desc = 'ONLINE'
+ORDER BY d.name ASC;
+");
+

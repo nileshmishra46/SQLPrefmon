@@ -78,6 +78,14 @@ $recCount = $db->query("SELECT COUNT(*) FROM recommendations WHERE is_resolved =
                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Manage system users, activate/deactivate accounts, and edit roles (admin, dba, viewer).</div>
                 </div>
             </a>
+
+            <a href="settings.php" class="btn btn-secondary" style="justify-content: flex-start; padding: 1rem;">
+                <i class="fa-solid fa-sliders" style="font-size: 1.2rem; width: 25px; text-align: center;"></i>
+                <div style="text-align: left;">
+                    <div style="font-weight: 600; color: #ffffff;">Global Settings & Retention</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Configure data store retention duration (days) and global warning thresholds.</div>
+                </div>
+            </a>
             
             <a href="audit.php" class="btn btn-secondary" style="justify-content: flex-start; padding: 1rem;">
                 <i class="fa-solid fa-receipt" style="font-size: 1.2rem; width: 25px; text-align: center;"></i>
