@@ -2,6 +2,7 @@
 // includes/db.php
 
 require_once dirname(__DIR__) . '/config/app.php';
+require_once __DIR__ . '/helpers.php';
 
 class PrefmonPDO extends PDO {
     private $dbType = 'sqlite';
@@ -70,10 +71,18 @@ function getDbConnection() {
                 $masterDb = new PDO($masterDsn, $user, $pass, [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
                 ]);
-                $check = $masterDb->prepare("SELECT database_id FROM sys.databases WHERE name = ?");
+                $check = $masterDb->prepare("SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = ?");
                 $check->execute([$dbName]);
-                if ($check->fetchColumn() === false) {
+                $rcsiVal = $check->fetchColumn();
+                if ($rcsiVal === false) {
                     $masterDb->exec("CREATE DATABASE [{$dbName}]");
+                    try {
+                        $masterDb->exec("ALTER DATABASE [{$dbName}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;");
+                    } catch (PDOException $ex) {}
+                } elseif ((int)$rcsiVal === 0) {
+                    try {
+                        $masterDb->exec("ALTER DATABASE [{$dbName}] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;");
+                    } catch (PDOException $ex) {}
                 }
                 $masterDb = null;
             } catch (PDOException $e) {
@@ -105,8 +114,11 @@ function getDbConnection() {
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
                 ], 'sqlite');
                 
-                // Enable foreign key constraints
+                // Enable foreign key constraints and WAL mode to prevent concurrency blocking
                 $db->exec("PRAGMA foreign_keys = ON;");
+                $db->exec("PRAGMA journal_mode = WAL;");
+                $db->exec("PRAGMA busy_timeout = 5000;");
+                $db->exec("PRAGMA synchronous = NORMAL;");
                 
                 if (!$dbExists || filesize($dbPath) === 0) {
                     initializeSchema($db);
@@ -114,6 +126,64 @@ function getDbConnection() {
                     // Online schema upgrades for SQLite
                     try {
                         $db->exec("ALTER TABLE servers ADD COLUMN trust_server_cert INTEGER DEFAULT 0");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("ALTER TABLE servers ADD COLUMN hadr_role TEXT DEFAULT NULL");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS alwayson_replicas (
+                            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            ag_name                 TEXT,
+                            replica_server_name     TEXT,
+                            role_desc               TEXT,
+                            operational_state_desc  TEXT,
+                            connected_state_desc    TEXT,
+                            synchronization_health_desc TEXT
+                        )");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS alwayson_databases (
+                            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            ag_name                 TEXT,
+                            database_name           TEXT,
+                            synchronization_state_desc TEXT,
+                            synchronization_health_desc TEXT,
+                            log_send_queue_size     REAL,
+                            log_send_rate           REAL,
+                            redo_queue_size         REAL,
+                            redo_rate               REAL
+                        )");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS alwayson_cluster (
+                            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            cluster_name            TEXT,
+                            quorum_type_desc        TEXT,
+                            quorum_state_desc       TEXT
+                        )");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS alwayson_cluster_members (
+                            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            member_name             TEXT,
+                            member_type_desc        TEXT,
+                            member_state_desc       TEXT,
+                            number_of_quorum_votes  INTEGER
+                        )");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_replicas_collected ON alwayson_replicas (server_id, collected_at)");
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_dbs_collected ON alwayson_databases (server_id, collected_at)");
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_cluster_collected ON alwayson_cluster (server_id, collected_at)");
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_members_collected ON alwayson_cluster_members (server_id, collected_at)");
                     } catch (PDOException $e) {}
                     try {
                         $db->exec("ALTER TABLE top_queries ADD COLUMN query_plan TEXT");
@@ -195,6 +265,36 @@ function getDbConnection() {
                     try {
                         $db->exec("ALTER TABLE db_backup_stats ADD COLUMN diff_backup_size_mb REAL");
                     } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS agent_job_status (
+                            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            job_id              TEXT,
+                            job_name            TEXT,
+                            enabled             INTEGER,
+                            description         TEXT,
+                            current_status      TEXT,
+                            last_run_time       DATETIME,
+                            run_duration_sec    INTEGER,
+                            last_outcome_message TEXT
+                        )");
+                    } catch (PDOException $e) {}
+                    try {
+                        $db->exec("CREATE TABLE IF NOT EXISTS agent_job_history (
+                            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                            server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+                            collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            job_id              TEXT,
+                            job_name            TEXT,
+                            step_id             INTEGER,
+                            step_name           TEXT,
+                            run_status          TEXT,
+                            run_time            DATETIME,
+                            run_duration_sec    INTEGER,
+                            message             TEXT
+                        )");
+                    } catch (PDOException $e) {}
                     
                     // Create index mappings if missing
                     try {
@@ -208,6 +308,8 @@ function getDbConnection() {
                         $db->exec("CREATE INDEX IF NOT EXISTS idx_deadlocks_server_collected ON deadlock_history (server_id, collected_at)");
                         $db->exec("CREATE INDEX IF NOT EXISTS idx_backups_server_collected ON db_backup_stats (server_id, collected_at)");
                         $db->exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs (created_at)");
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_agent_job_status_server_collected ON agent_job_status (server_id, collected_at)");
+                        $db->exec("CREATE INDEX IF NOT EXISTS idx_agent_job_history_server_collected ON agent_job_history (server_id, collected_at)");
                     } catch (PDOException $e) {}
                 }
             } catch (PDOException $e) {
@@ -246,7 +348,8 @@ function initializeSchema(PDO $db) {
         added_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_checked    DATETIME,
         last_status     TEXT DEFAULT 'unknown',
-        trust_server_cert INTEGER DEFAULT 0
+        trust_server_cert INTEGER DEFAULT 0,
+        hadr_role       TEXT DEFAULT NULL
     )");
     
     // 3. Metric snapshots table
@@ -414,6 +517,85 @@ function initializeSchema(PDO $db) {
         last_log_backup     DATETIME,
         log_backup_size_mb  REAL
     )");
+
+    // 16. Agent Job Status table
+    $db->exec("CREATE TABLE IF NOT EXISTS agent_job_status (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        job_id              TEXT,
+        job_name            TEXT,
+        enabled             INTEGER,
+        description         TEXT,
+        current_status      TEXT,
+        last_run_time       DATETIME,
+        run_duration_sec    INTEGER,
+        last_outcome_message TEXT
+    )");
+
+    // 17. Agent Job History table
+    $db->exec("CREATE TABLE IF NOT EXISTS agent_job_history (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id           INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        job_id              TEXT,
+        job_name            TEXT,
+        step_id             INTEGER,
+        step_name           TEXT,
+        run_status          TEXT,
+        run_time            DATETIME,
+        run_duration_sec    INTEGER,
+        message             TEXT
+    )");
+
+    // 18. Always On Replicas table
+    $db->exec("CREATE TABLE IF NOT EXISTS alwayson_replicas (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ag_name                 TEXT,
+        replica_server_name     TEXT,
+        role_desc               TEXT,
+        operational_state_desc  TEXT,
+        connected_state_desc    TEXT,
+        synchronization_health_desc TEXT
+    )");
+
+    // 19. Always On Databases table
+    $db->exec("CREATE TABLE IF NOT EXISTS alwayson_databases (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ag_name                 TEXT,
+        database_name           TEXT,
+        synchronization_state_desc TEXT,
+        synchronization_health_desc TEXT,
+        log_send_queue_size     REAL,
+        log_send_rate           REAL,
+        redo_queue_size         REAL,
+        redo_rate               REAL
+    )");
+
+    // 20. Always On Cluster status table
+    $db->exec("CREATE TABLE IF NOT EXISTS alwayson_cluster (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        cluster_name            TEXT,
+        quorum_type_desc        TEXT,
+        quorum_state_desc       TEXT
+    )");
+
+    // 21. Always On Cluster Members table
+    $db->exec("CREATE TABLE IF NOT EXISTS alwayson_cluster_members (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id               INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        member_name             TEXT,
+        member_type_desc        TEXT,
+        member_state_desc       TEXT,
+        number_of_quorum_votes  INTEGER
+    )");
     
     // 15. Create secondary indexes for performance optimization
     $db->exec("CREATE INDEX IF NOT EXISTS idx_snapshots_server_collected ON metric_snapshots (server_id, collected_at)");
@@ -426,6 +608,12 @@ function initializeSchema(PDO $db) {
     $db->exec("CREATE INDEX IF NOT EXISTS idx_deadlocks_server_collected ON deadlock_history (server_id, collected_at)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_backups_server_collected ON db_backup_stats (server_id, collected_at)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs (created_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_agent_job_status_server_collected ON agent_job_status (server_id, collected_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_agent_job_history_server_collected ON agent_job_history (server_id, collected_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_replicas_collected ON alwayson_replicas (server_id, collected_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_dbs_collected ON alwayson_databases (server_id, collected_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_cluster_collected ON alwayson_cluster (server_id, collected_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_alwayson_members_collected ON alwayson_cluster_members (server_id, collected_at)");
 
     // 9. Seeding initial Administrator user
     $checkStmt = $db->query("SELECT COUNT(*) FROM users");
@@ -465,8 +653,12 @@ function initializeMssqlSchema(PDO $db) {
         is_active       INT DEFAULT 1,
         last_checked    DATETIME,
         last_status     NVARCHAR(50),
-        trust_server_cert INT DEFAULT 0
+        trust_server_cert INT DEFAULT 0,
+        hadr_role       NVARCHAR(50) DEFAULT NULL
     )");
+
+    $db->exec("IF COL_LENGTH('servers', 'hadr_role') IS NULL
+        ALTER TABLE servers ADD hadr_role NVARCHAR(50) DEFAULT NULL");
     
     $db->exec("IF OBJECT_ID('metric_snapshots', 'U') IS NULL
     CREATE TABLE metric_snapshots (
@@ -480,7 +672,7 @@ function initializeMssqlSchema(PDO $db) {
         buffer_cache_hit_ratio  REAL,
         disk_read_ms            REAL,
         disk_write_ms           REAL,
-        active_connections      INT,
+        active_conn             INT,
         blocked_procs           INT,
         batch_req_sec           REAL,
         sql_recomp_sec          REAL
@@ -616,6 +808,85 @@ function initializeMssqlSchema(PDO $db) {
         log_backup_size_mb  REAL
     )");
 
+    $db->exec("IF OBJECT_ID('agent_job_status', 'U') IS NULL
+    CREATE TABLE agent_job_status (
+        id                  INT IDENTITY(1,1) PRIMARY KEY,
+        server_id           INT,
+        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        job_id              NVARCHAR(100),
+        job_name            NVARCHAR(256),
+        enabled             INT,
+        description         NVARCHAR(MAX),
+        current_status      NVARCHAR(100),
+        last_run_time       DATETIME,
+        run_duration_sec    INT,
+        last_outcome_message NVARCHAR(MAX)
+    )");
+
+    $db->exec("IF OBJECT_ID('agent_job_history', 'U') IS NULL
+    CREATE TABLE agent_job_history (
+        id                  INT IDENTITY(1,1) PRIMARY KEY,
+        server_id           INT,
+        collected_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+        job_id              NVARCHAR(100),
+        job_name            NVARCHAR(256),
+        step_id             INT,
+        step_name           NVARCHAR(256),
+        run_status          NVARCHAR(100),
+        run_time            DATETIME,
+        run_duration_sec    INT,
+        message             NVARCHAR(MAX)
+    )");
+
+    $db->exec("IF OBJECT_ID('alwayson_replicas', 'U') IS NULL
+    CREATE TABLE alwayson_replicas (
+        id                      INT IDENTITY(1,1) PRIMARY KEY,
+        server_id               INT,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ag_name                 NVARCHAR(100),
+        replica_server_name     NVARCHAR(100),
+        role_desc               NVARCHAR(50),
+        operational_state_desc  NVARCHAR(100),
+        connected_state_desc    NVARCHAR(100),
+        synchronization_health_desc NVARCHAR(100)
+    )");
+
+    $db->exec("IF OBJECT_ID('alwayson_databases', 'U') IS NULL
+    CREATE TABLE alwayson_databases (
+        id                      INT IDENTITY(1,1) PRIMARY KEY,
+        server_id               INT,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ag_name                 NVARCHAR(100),
+        database_name           NVARCHAR(100),
+        synchronization_state_desc NVARCHAR(100),
+        synchronization_health_desc NVARCHAR(100),
+        log_send_queue_size     REAL,
+        log_send_rate           REAL,
+        redo_queue_size         REAL,
+        redo_rate               REAL
+    )");
+
+    $db->exec("IF OBJECT_ID('alwayson_cluster', 'U') IS NULL
+    CREATE TABLE alwayson_cluster (
+        id                      INT IDENTITY(1,1) PRIMARY KEY,
+        server_id               INT,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        cluster_name            NVARCHAR(100),
+        quorum_type_desc        NVARCHAR(100),
+        quorum_state_desc       NVARCHAR(100)
+    )");
+
+    $db->exec("IF OBJECT_ID('alwayson_cluster_members', 'U') IS NULL
+    CREATE TABLE alwayson_cluster_members (
+        id                      INT IDENTITY(1,1) PRIMARY KEY,
+        server_id               INT,
+        collected_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+        member_name             NVARCHAR(100),
+        member_type_desc        NVARCHAR(100),
+        member_state_desc       NVARCHAR(100),
+        number_of_quorum_votes  INT
+    )");
+
     // 2. Create secondary indexes
     $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_snapshots_server_collected' AND object_id = OBJECT_ID('metric_snapshots'))
         CREATE INDEX idx_snapshots_server_collected ON metric_snapshots (server_id, collected_at)");
@@ -643,6 +914,24 @@ function initializeMssqlSchema(PDO $db) {
         
     $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_backups_server_collected' AND object_id = OBJECT_ID('db_backup_stats'))
         CREATE INDEX idx_backups_server_collected ON db_backup_stats (server_id, collected_at)");
+
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_agent_job_status_server_collected' AND object_id = OBJECT_ID('agent_job_status'))
+        CREATE INDEX idx_agent_job_status_server_collected ON agent_job_status (server_id, collected_at)");
+
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_agent_job_history_server_collected' AND object_id = OBJECT_ID('agent_job_history'))
+        CREATE INDEX idx_agent_job_history_server_collected ON agent_job_history (server_id, collected_at)");
+        
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alwayson_replicas_collected' AND object_id = OBJECT_ID('alwayson_replicas'))
+        CREATE INDEX idx_alwayson_replicas_collected ON alwayson_replicas (server_id, collected_at)");
+
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alwayson_dbs_collected' AND object_id = OBJECT_ID('alwayson_databases'))
+        CREATE INDEX idx_alwayson_dbs_collected ON alwayson_databases (server_id, collected_at)");
+
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alwayson_cluster_collected' AND object_id = OBJECT_ID('alwayson_cluster'))
+        CREATE INDEX idx_alwayson_cluster_collected ON alwayson_cluster (server_id, collected_at)");
+
+    $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alwayson_members_collected' AND object_id = OBJECT_ID('alwayson_cluster_members'))
+        CREATE INDEX idx_alwayson_members_collected ON alwayson_cluster_members (server_id, collected_at)");
         
     $db->exec("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_audit_created' AND object_id = OBJECT_ID('audit_logs'))
         CREATE INDEX idx_audit_created ON audit_logs (created_at)");

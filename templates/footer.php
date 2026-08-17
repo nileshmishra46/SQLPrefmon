@@ -1,3 +1,7 @@
+        <!-- Global Page Footer -->
+        <footer style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border-glass); text-align: center; font-size: 0.8rem; color: var(--text-muted); padding-bottom: 1.5rem;">
+            <span>Developed by <strong style="color: var(--text-secondary);">Nilesh Mishra</strong></span>
+        </footer>
         </div> <!-- End of main-content -->
     </div> <!-- End of app-container -->
 

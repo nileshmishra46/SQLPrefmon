@@ -292,3 +292,152 @@ WHERE d.name <> 'tempdb' AND d.state_desc = 'ONLINE'
 ORDER BY d.name ASC;
 ");
 
+// 12. SQL Agent Jobs current status query
+define("SQL_QUERY_AGENT_JOBS", "
+SELECT 
+    j.job_id,
+    j.name AS job_name,
+    j.enabled,
+    j.description,
+    CASE 
+        WHEN ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 'Running'
+        WHEN js.last_run_outcome = 0 THEN 'Failed'
+        WHEN js.last_run_outcome = 1 THEN 'Succeeded'
+        WHEN js.last_run_outcome = 2 THEN 'Retry'
+        WHEN js.last_run_outcome = 3 THEN 'Canceled'
+        ELSE 'Idle/Never Run'
+    END AS current_status,
+    COALESCE(ja.start_execution_date, 
+        CASE WHEN js.last_run_date > 0 THEN msdb.dbo.agent_datetime(js.last_run_date, js.last_run_time) ELSE NULL END
+    ) AS last_run_time,
+    CASE 
+        WHEN ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NULL THEN 
+            DATEDIFF(second, ja.start_execution_date, GETDATE())
+        ELSE 
+            (js.last_run_duration / 10000 * 3600) + 
+            ((js.last_run_duration % 10000) / 100 * 60) + 
+            (js.last_run_duration % 100)
+    END AS run_duration_sec,
+    h.message AS last_outcome_message
+FROM msdb.dbo.sysjobs j
+LEFT JOIN msdb.dbo.sysjobservers js ON j.job_id = js.job_id
+LEFT JOIN (
+    SELECT job_id, start_execution_date, stop_execution_date,
+           ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY session_id DESC, start_execution_date DESC) as rn
+    FROM msdb.dbo.sysjobactivity
+) ja ON j.job_id = ja.job_id AND ja.rn = 1
+LEFT JOIN (
+    SELECT job_id, message,
+           ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY run_date DESC, run_time DESC) as rn
+    FROM msdb.dbo.sysjobhistory
+    WHERE step_id = 0
+) h ON j.job_id = h.job_id AND h.rn = 1
+ORDER BY j.name ASC;
+");
+
+// 13. SQL Agent Jobs step-by-step history query (last 48 hours)
+define("SQL_QUERY_AGENT_JOB_HISTORY", "
+SELECT 
+    j.job_id,
+    j.name AS job_name,
+    h.step_id,
+    h.step_name,
+    CASE h.run_status
+        WHEN 0 THEN 'Failed'
+        WHEN 1 THEN 'Succeeded'
+        WHEN 2 THEN 'Retry'
+        WHEN 3 THEN 'Canceled'
+        WHEN 4 THEN 'In Progress'
+        ELSE 'Unknown'
+    END AS run_status,
+    CASE 
+        WHEN h.run_date > 0 THEN msdb.dbo.agent_datetime(h.run_date, h.run_time)
+        ELSE NULL 
+    END AS run_time,
+    (h.run_duration / 10000 * 3600) + 
+    ((h.run_duration % 10000) / 100 * 60) + 
+    (h.run_duration % 100) AS run_duration_sec,
+    h.message
+FROM msdb.dbo.sysjobhistory h
+JOIN msdb.dbo.sysjobs j ON h.job_id = j.job_id
+WHERE h.run_date >= CONVERT(INT, CONVERT(VARCHAR(8), DATEADD(day, -2, GETDATE()), 112))
+ORDER BY run_time DESC, h.step_id ASC;
+");
+
+// 14. Always On Local Replica Role Query
+define("SQL_QUERY_HADR_ROLE", "
+IF SERVERPROPERTY('IsHadrEnabled') = 1
+BEGIN
+    SELECT CAST(rs.role_desc AS VARCHAR(50)) AS role_desc
+    FROM sys.dm_hadr_availability_replica_states rs
+    WHERE rs.is_local = 1
+END
+ELSE
+BEGIN
+    SELECT NULL AS role_desc
+END
+");
+
+// 15. Always On Availability Group Replicas Query
+define("SQL_QUERY_HADR_REPLICAS", "
+IF SERVERPROPERTY('IsHadrEnabled') = 1
+BEGIN
+    SELECT 
+        CAST(ag.name AS VARCHAR(100)) AS ag_name,
+        CAST(ar.replica_server_name AS VARCHAR(100)) AS replica_server_name,
+        CAST(rs.role_desc AS VARCHAR(50)) AS role_desc,
+        CAST(rs.operational_state_desc AS VARCHAR(100)) AS operational_state_desc,
+        CAST(rs.connected_state_desc AS VARCHAR(100)) AS connected_state_desc,
+        CAST(rs.synchronization_health_desc AS VARCHAR(100)) AS synchronization_health_desc
+    FROM sys.availability_groups ag
+    JOIN sys.availability_replicas ar ON ag.group_id = ar.group_id
+    JOIN sys.dm_hadr_availability_replica_states rs ON ar.replica_id = rs.replica_id
+END
+");
+
+// 16. Always On Databases replica status Query
+define("SQL_QUERY_HADR_DATABASES", "
+IF SERVERPROPERTY('IsHadrEnabled') = 1
+BEGIN
+    SELECT 
+        CAST(ag.name AS VARCHAR(100)) AS ag_name,
+        CAST(DB_NAME(drs.database_id) AS VARCHAR(100)) AS database_name,
+        CAST(drs.synchronization_state_desc AS VARCHAR(100)) AS synchronization_state_desc,
+        CAST(drs.synchronization_health_desc AS VARCHAR(100)) AS synchronization_health_desc,
+        CAST(drs.log_send_queue_size AS REAL) AS log_send_queue_size,
+        CAST(drs.log_send_rate AS REAL) AS log_send_rate,
+        CAST(drs.redo_queue_size AS REAL) AS redo_queue_size,
+        CAST(drs.redo_rate AS REAL) AS redo_rate
+    FROM sys.availability_groups ag
+    JOIN sys.dm_hadr_database_replica_states drs ON ag.group_id = drs.group_id
+    WHERE drs.is_local = 1
+END
+");
+
+// 17. Windows Server Failover Cluster (WSFC) Quorum Info Query
+define("SQL_QUERY_HADR_CLUSTER", "
+IF SERVERPROPERTY('IsHadrEnabled') = 1
+BEGIN
+    SELECT 
+        CAST(cluster_name AS VARCHAR(100)) AS cluster_name,
+        CAST(quorum_type_desc AS VARCHAR(100)) AS quorum_type_desc,
+        CAST(quorum_state_desc AS VARCHAR(100)) AS quorum_state_desc
+    FROM sys.dm_hadr_cluster
+END
+");
+
+// 18. Cluster Nodes / Quorum Health Query
+define("SQL_QUERY_HADR_CLUSTER_MEMBERS", "
+IF SERVERPROPERTY('IsHadrEnabled') = 1
+BEGIN
+    SELECT 
+        CAST(member_name AS VARCHAR(100)) AS member_name,
+        CAST(member_type_desc AS VARCHAR(100)) AS member_type_desc,
+        CAST(member_state_desc AS VARCHAR(100)) AS member_state_desc,
+        CAST(number_of_quorum_votes AS INT) AS number_of_quorum_votes
+    FROM sys.dm_hadr_cluster_members
+END
+");
+
+
+

@@ -47,6 +47,7 @@ $blockingMin = getAppSetting('blocking_threshold_min', THRESHOLD_BLOCKING_THRESH
 $backupFull = getAppSetting('backup_full_threshold', 24);
 $backupDiff = getAppSetting('backup_diff_threshold', 24);
 $backupLog = getAppSetting('backup_log_threshold', 4);
+$appName = getAppSetting('app_name', 'SQLPrefmon');
 
 $repoType = getAppSetting('repo_db_type', 'sqlite');
 $repoHost = getAppSetting('repo_mssql_host', 'localhost');
@@ -72,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newBackupFull = (int)($_POST['backup_full_threshold'] ?? 24);
         $newBackupDiff = (int)($_POST['backup_diff_threshold'] ?? 24);
         $newBackupLog = (int)($_POST['backup_log_threshold'] ?? 4);
+        $newAppName = $_POST['app_name'] ?? 'SQLPrefmon';
 
         $newRepoType = $_POST['repo_db_type'] ?? 'sqlite';
         $newRepoHost = $_POST['repo_mssql_host'] ?? 'localhost';
@@ -105,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'backup_full_threshold' => $newBackupFull,
             'backup_diff_threshold' => $newBackupDiff,
             'backup_log_threshold' => $newBackupLog,
+            'app_name' => $newAppName,
             'repo_db_type' => $newRepoType,
             'repo_mssql_host' => $newRepoHost,
             'repo_mssql_port' => $newRepoPort,
@@ -130,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $backupFull = $newBackupFull;
             $backupDiff = $newBackupDiff;
             $backupLog = $newBackupLog;
+            $appName = $newAppName;
             $repoType = $newRepoType;
             $repoHost = $newRepoHost;
             $repoPort = $newRepoPort;
@@ -308,6 +312,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         </script>
+        
+        <!-- General Customization Settings -->
+        <div style="grid-column: span 2; border-top: 2px solid var(--border-glass); padding-top: 2rem; margin-top: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; color: var(--color-primary); display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-solid fa-desktop"></i>
+                <span>Branding Customization</span>
+            </h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                Customize general application appearance settings.
+            </p>
+        </div>
+
+        <div class="form-group" style="grid-column: span 2;">
+            <label for="app_name">Custom Tool Display Name</label>
+            <input type="text" id="app_name" name="app_name" value="<?= sanitize($appName) ?>" class="no-icon-input" style="max-width: 400px;" required>
+            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 0.25rem;">Change the display title of this performance monitor tool. Default is <strong>SQLPrefmon</strong>.</small>
+        </div>
         
         <div style="grid-column: span 2; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem;">
             <button type="submit" class="btn btn-primary btn-glow">

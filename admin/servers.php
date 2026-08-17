@@ -13,6 +13,14 @@ $error = '';
 $success = '';
 $testResult = null;
 
+$editId = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
+$editSrv = null;
+if ($editId > 0) {
+    $stmt = $db->prepare("SELECT * FROM servers WHERE id = ?");
+    $stmt->execute([$editId]);
+    $editSrv = $stmt->fetch();
+}
+
 // Handle CRUD and Connection Testing
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -42,6 +50,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 logAuditEvent($_SESSION['user_id'], 'create_server', 'server', $serverId, "Added server: $displayName ($environment)");
                 $success = "Server '$displayName' added to inventory.";
+            }
+        } elseif ($action === 'update') {
+            $serverId = (int)$_POST['server_id'] ?? 0;
+            $displayName = trim($_POST['display_name'] ?? '');
+            $hostname = trim($_POST['hostname'] ?? '');
+            $port = (int)($_POST['port'] ?? 1433);
+            $instanceName = trim($_POST['instance_name'] ?? '');
+            $username = trim($_POST['username'] ?? '');
+            $password = $_POST['password'] ?? '';
+            $environment = $_POST['environment'] ?? 'production';
+            $trustServerCert = isset($_POST['trust_server_cert']) ? 1 : 0;
+            
+            if (empty($displayName) || empty($hostname) || empty($username)) {
+                $error = 'Display Name, Hostname, and Username are required.';
+            } else {
+                if ($password !== '') {
+                    $encryptedPassword = encryptPassword($password);
+                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, password = ?, environment = ?, trust_server_cert = ? WHERE id = ?");
+                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $encryptedPassword, $environment, $trustServerCert, $serverId]);
+                } else {
+                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, environment = ?, trust_server_cert = ? WHERE id = ?");
+                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $environment, $trustServerCert, $serverId]);
+                }
+                
+                logAuditEvent($_SESSION['user_id'], 'update_server', 'server', $serverId, "Updated server: $displayName ($environment)");
+                $success = "Server '$displayName' details updated successfully.";
+                $editId = 0;
+                $editSrv = null;
             }
         } elseif ($action === 'delete') {
             $serverId = (int)($_POST['server_id'] ?? 0);
@@ -250,18 +286,21 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
         </div>
     </div>
     
-    <!-- Add Server Form -->
+    <!-- Register/Modify Server Form -->
     <div class="glass-card">
-        <h3 style="margin-bottom: 1.25rem;">Register Database Server</h3>
+        <h3 style="margin-bottom: 1.25rem;"><?= $editSrv ? 'Modify Connection: ' . sanitize($editSrv['display_name']) : 'Register Database Server' ?></h3>
         <form action="servers.php" method="POST">
-            <input type="hidden" name="action" value="create">
+            <input type="hidden" name="action" value="<?= $editSrv ? 'update' : 'create' ?>">
             <input type="hidden" name="csrf_token" value="<?= getCsrfToken() ?>">
+            <?php if ($editSrv): ?>
+                <input type="hidden" name="server_id" value="<?= (int)$editSrv['id'] ?>">
+            <?php endif; ?>
             
             <div class="form-group">
                 <label for="display_name">Friendly Display Name</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-tag input-icon"></i>
-                    <input type="text" id="display_name" name="display_name" placeholder="e.g. SQL01 - Production" required>
+                    <input type="text" id="display_name" name="display_name" placeholder="e.g. SQL01 - Production" value="<?= $editSrv ? sanitize($editSrv['display_name']) : '' ?>" required>
                 </div>
             </div>
             
@@ -269,19 +308,19 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                 <label for="hostname">Server Hostname or IP</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-network-wired input-icon"></i>
-                    <input type="text" id="hostname" name="hostname" placeholder="e.g. localhost, sqlserver.local" required>
+                    <input type="text" id="hostname" name="hostname" placeholder="e.g. localhost, sqlserver.local" value="<?= $editSrv ? sanitize($editSrv['hostname']) : '' ?>" required>
                 </div>
             </div>
             
             <div class="grid-2" style="gap: 1rem;">
                 <div class="form-group">
                     <label for="port">Port</label>
-                    <input type="number" id="port" name="port" value="1433" class="no-icon-input" required>
+                    <input type="number" id="port" name="port" value="<?= $editSrv ? (int)$editSrv['port'] : '1433' ?>" class="no-icon-input" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="instance_name">Named Instance (Optional)</label>
-                    <input type="text" id="instance_name" name="instance_name" placeholder="e.g. SQLEXPRESS" class="no-icon-input">
+                    <input type="text" id="instance_name" name="instance_name" placeholder="e.g. SQLEXPRESS" value="<?= $editSrv ? sanitize($editSrv['instance_name']) : '' ?>" class="no-icon-input">
                 </div>
             </div>
             
@@ -289,7 +328,7 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                 <label for="username">Monitoring SQL Login</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-user-shield input-icon"></i>
-                    <input type="text" id="username" name="username" placeholder="e.g. sqlperf_monitor" required>
+                    <input type="text" id="username" name="username" placeholder="e.g. sqlperf_monitor" value="<?= $editSrv ? sanitize($editSrv['username']) : '' ?>" required>
                 </div>
             </div>
             
@@ -297,12 +336,12 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                 <label for="password">Password</label>
                 <div class="input-with-icon">
                     <i class="fa-solid fa-key input-icon"></i>
-                    <input type="password" id="password" name="password" placeholder="Enter credential password" required>
+                    <input type="password" id="password" name="password" placeholder="<?= $editSrv ? 'Leave empty to keep unchanged' : 'Enter credential password' ?>" <?= $editSrv ? '' : 'required' ?>>
                 </div>
             </div>
             
             <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem;">
-                <input type="checkbox" id="trust_server_cert" name="trust_server_cert" value="1" style="width: auto; margin-right: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="trust_server_cert" name="trust_server_cert" value="1" style="width: auto; margin-right: 0.5rem; cursor: pointer;" <?= $editSrv && $editSrv['trust_server_cert'] ? 'checked' : '' ?>>
                 <label for="trust_server_cert" style="display: inline; margin-bottom: 0; cursor: pointer; color: var(--text-secondary); font-weight: 500;">Trust Server Certificate (Mandatory for SQL Server 2022 / ODBC 18)</label>
             </div>
             
@@ -311,18 +350,25 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                 <div class="input-with-icon">
                     <i class="fa-solid fa-tags input-icon"></i>
                     <select id="environment" name="environment" required>
-                        <option value="demo">Demo / Simulator Mode (Produces realistic mock data)</option>
-                        <option value="production" selected>Production Instance (Real connection)</option>
-                        <option value="staging">Staging Instance (Real connection)</option>
-                        <option value="dev">Dev/Test Instance (Real connection)</option>
+                        <option value="demo" <?= $editSrv && $editSrv['environment'] === 'demo' ? 'selected' : '' ?>>Demo / Simulator Mode (Produces realistic mock data)</option>
+                        <option value="production" <?= !$editSrv || $editSrv['environment'] === 'production' ? 'selected' : '' ?>>Production Instance (Real connection)</option>
+                        <option value="staging" <?= $editSrv && $editSrv['environment'] === 'staging' ? 'selected' : '' ?>>Staging Instance (Real connection)</option>
+                        <option value="dev" <?= $editSrv && $editSrv['environment'] === 'dev' ? 'selected' : '' ?>>Dev/Test Instance (Real connection)</option>
                     </select>
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary btn-block btn-glow" style="margin-top: 1rem;">
-                <i class="fa-solid fa-circle-plus"></i>
-                <span>Register Server</span>
-            </button>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <button type="submit" class="btn btn-primary btn-glow" style="flex: 1;">
+                    <i class="fa-solid <?= $editSrv ? 'fa-floppy-disk' : 'fa-circle-plus' ?>"></i>
+                    <span><?= $editSrv ? 'Save Changes' : 'Register Server' ?></span>
+                </button>
+                <?php if ($editSrv): ?>
+                    <a href="servers.php" class="btn btn-secondary" style="display: inline-flex; align-items: center; justify-content: center;">
+                        Cancel
+                    </a>
+                <?php endif; ?>
+            </div>
         </form>
     </div>
 </div>

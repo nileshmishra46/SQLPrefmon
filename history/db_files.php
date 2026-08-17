@@ -105,10 +105,10 @@ if ($serverId > 0) {
     </div>
 </div>
 
-<!-- Instance Filter panel -->
-<div class="glass-card animate-fade-in" style="animation-delay: 0.05s; padding: 1.25rem; margin-bottom: 2rem;">
-    <form action="db_files.php" method="GET" style="display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap;">
-        <div class="form-group" style="margin-bottom: 0; min-width: 250px;">
+<!-- Instance Filter Panel -->
+<div class="glass-card animate-fade-in" style="animation-delay: 0.05s; padding: 1.25rem; margin-bottom: 1.5rem;">
+    <form action="db_files.php" method="GET" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="margin-bottom: 0; min-width: 250px; max-width: 350px;">
             <label for="server_id" style="font-weight: 500; font-size: 0.85rem;">Monitored SQL Server Instance</label>
             <select id="server_id" name="server_id" class="no-icon-input" onchange="this.form.submit()" style="padding: 0.6rem 1rem;">
                 <?php if (empty($servers)): ?>

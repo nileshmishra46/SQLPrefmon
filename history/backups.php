@@ -118,11 +118,10 @@ function formatSize($mb) {
 </div>
 
 <!-- Search & Filtering Panel -->
-<div class="glass-card animate-fade-in" style="animation-delay: 0.05s; padding: 1.5rem; margin-bottom: 1.5rem;">
-    <form action="backups.php" method="GET" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: flex-end;">
-        
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="server_id">Monitored Server</label>
+<div class="glass-card animate-fade-in" style="animation-delay: 0.05s; padding: 1.25rem; margin-bottom: 1.5rem;">
+    <form action="backups.php" method="GET" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="margin-bottom: 0; min-width: 250px; max-width: 350px;">
+            <label for="server_id" style="font-weight: 500; font-size: 0.85rem;">Monitored Server</label>
             <select id="server_id" name="server_id" class="no-icon-input" style="padding: 0.6rem 1rem;">
                 <?php foreach ($servers as $s): ?>
                     <option value="<?= $s['id'] ?>" <?= $serverId === (int)$s['id'] ? 'selected' : '' ?>><?= sanitize($s['display_name']) ?></option>
@@ -130,11 +129,9 @@ function formatSize($mb) {
             </select>
         </div>
         
-        <div class="form-group" style="margin-bottom: 0;">
-            <button type="submit" class="btn btn-primary" style="padding: 0.65rem; width: 100%;">
-                <i class="fa-solid fa-filter"></i> Select Server
-            </button>
-        </div>
+        <button type="submit" class="btn btn-primary" style="padding: 0.6rem 1.5rem; width: auto; margin-bottom: 0;">
+            <i class="fa-solid fa-filter"></i> Select Server
+        </button>
     </form>
 </div>
 
@@ -297,23 +294,23 @@ function formatSize($mb) {
                 SQLPrefmon monitors backup ages and triggers diagnostic alerts if backups exceed configured limits:
             </p>
             
-            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
-                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.75rem; border-radius: 6px;">
-                    <div style="font-size: 0.8rem; font-weight: 600; color: #ffffff;">Full Backup Limit:</div>
-                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--color-warning); margin-top: 0.2rem;">
-                        <?= $fullThresh ?> Hours
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 80px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.5rem; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Full Backup</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning); margin-top: 0.15rem;">
+                        <?= $fullThresh ?>h
                     </div>
                 </div>
-                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.75rem; border-radius: 6px;">
-                    <div style="font-size: 0.8rem; font-weight: 600; color: #ffffff;">Diff Backup Limit:</div>
-                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--color-warning); margin-top: 0.2rem;">
-                        <?= $diffThresh ?> Hours
+                <div style="flex: 1; min-width: 80px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.5rem; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Diff Backup</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning); margin-top: 0.15rem;">
+                        <?= $diffThresh ?>h
                     </div>
                 </div>
-                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.75rem; border-radius: 6px;">
-                    <div style="font-size: 0.8rem; font-weight: 600; color: #ffffff;">Log Backup Limit:</div>
-                    <div style="font-size: 1.2rem; font-weight: 700; color: var(--color-warning); margin-top: 0.2rem;">
-                        <?= $logThresh ?> Hours
+                <div style="flex: 1; min-width: 80px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 0.5rem; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Log Backup</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--color-warning); margin-top: 0.15rem;">
+                        <?= $logThresh ?>h
                     </div>
                 </div>
             </div>

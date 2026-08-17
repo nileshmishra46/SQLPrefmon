@@ -69,6 +69,7 @@ foreach ($servers as $srv) {
     writeLog("Processing server: $serverName (ID: $serverId, Env: $env)");
     
     $status = 'offline';
+    $hadrRole = null;
     
     if ($env === 'demo') {
         // --- DEMO / SIMULATION MODE ---
@@ -503,6 +504,302 @@ foreach ($servers as $srv) {
                 }
             }
             
+            // Generate simulated SQL Agent Jobs for DEMO
+            $mockJobs = [
+                [
+                    'job_id' => 'DEMO-JOB-1-BACKUP',
+                    'job_name' => 'Database Backup - Hourly Transaction Logs',
+                    'enabled' => 1,
+                    'description' => 'Executes hourly transaction log backups for the Production_DB database.',
+                    'current_status' => 'Succeeded',
+                    'last_run_time' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
+                    'run_duration_sec' => 45,
+                    'last_outcome_message' => 'The job succeeded. The last step run was Step 1 (Backup Log).'
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-2-REBUILD',
+                    'job_name' => 'Database Tuning - Weekly Index Rebuilds',
+                    'enabled' => 1,
+                    'description' => 'Performs index reorganizations and rebuilds on fragmented indexes to maintain high search performance.',
+                    'current_status' => 'Running',
+                    'last_run_time' => date('Y-m-d H:i:s'),
+                    'run_duration_sec' => 120,
+                    'last_outcome_message' => 'The job is currently running. Step 2 (Reorganize indexes) is active.'
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-3-CLEANUP',
+                    'job_name' => 'System Maintenance - Purge Audit Records',
+                    'enabled' => 1,
+                    'description' => 'Deletes security and audit records older than 90 days from the compliance log table.',
+                    'current_status' => 'Failed',
+                    'last_run_time' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                    'run_duration_sec' => 310,
+                    'last_outcome_message' => 'The job failed. The last step run was Step 2 (Compress Logs). The job was invoked by Schedule 2 (Daily Compliance Cleanup).'
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-4-REPORT',
+                    'job_name' => 'Data Sync - Daily Sales BI Report Aggregation',
+                    'enabled' => 0,
+                    'description' => 'Aggregates sales records into reporting datamart tables for Tableau and PowerBI dashboards.',
+                    'current_status' => 'Idle/Never Run',
+                    'last_run_time' => null,
+                    'run_duration_sec' => null,
+                    'last_outcome_message' => null
+                ]
+            ];
+
+            $db->prepare("DELETE FROM agent_job_status WHERE server_id = ?")->execute([$serverId]);
+            $stmtJobInsert = $db->prepare("
+                INSERT INTO agent_job_status (
+                    server_id, collected_at, job_id, job_name, enabled, description, 
+                    current_status, last_run_time, run_duration_sec, last_outcome_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            foreach ($mockJobs as $mj) {
+                $stmtJobInsert->execute([
+                    $serverId,
+                    $timestamp,
+                    $mj['job_id'],
+                    $mj['job_name'],
+                    $mj['enabled'],
+                    $mj['description'],
+                    $mj['current_status'],
+                    $mj['last_run_time'],
+                    $mj['run_duration_sec'],
+                    $mj['last_outcome_message']
+                ]);
+            }
+
+            // Generate simulated job history steps for DEMO
+            $mockJobHist = [
+                // JOB 1: Backup logs steps
+                [
+                    'job_id' => 'DEMO-JOB-1-BACKUP',
+                    'job_name' => 'Database Backup - Hourly Transaction Logs',
+                    'step_id' => 1,
+                    'step_name' => 'Backup Log to Disk',
+                    'run_status' => 'Succeeded',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
+                    'run_duration_sec' => 45,
+                    'message' => "Processed 2382 pages for database 'Production_DB', file 'Prod_Log' on file 1.\nBACKUP LOG successfully processed 2382 pages in 0.452 seconds (41.134 MB/sec)."
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-1-BACKUP',
+                    'job_name' => 'Database Backup - Hourly Transaction Logs',
+                    'step_id' => 0, // Outcome step
+                    'step_name' => '(Job Outcome)',
+                    'run_status' => 'Succeeded',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-15 minutes')),
+                    'run_duration_sec' => 45,
+                    'message' => 'The job succeeded. The last step run was Step 1 (Backup Log to Disk).'
+                ],
+                
+                // JOB 2: Index rebuilds steps (In progress)
+                [
+                    'job_id' => 'DEMO-JOB-2-REBUILD',
+                    'job_name' => 'Database Tuning - Weekly Index Rebuilds',
+                    'step_id' => 1,
+                    'step_name' => 'Rebuild high-frag clustered indexes',
+                    'run_status' => 'Succeeded',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-2 minutes')),
+                    'run_duration_sec' => 120,
+                    'message' => "Index rebuild completed for index 'PK_Orders' on table 'Orders'. Fragmentation reduced from 87% to 0.4%."
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-2-REBUILD',
+                    'job_name' => 'Database Tuning - Weekly Index Rebuilds',
+                    'step_id' => 2,
+                    'step_name' => 'Reorganize nonclustered indexes',
+                    'run_status' => 'In Progress',
+                    'run_time' => date('Y-m-d H:i:s'),
+                    'run_duration_sec' => 30,
+                    'message' => 'Step is currently executing...'
+                ],
+
+                // JOB 3: Failed cleanup steps
+                [
+                    'job_id' => 'DEMO-JOB-3-CLEANUP',
+                    'job_name' => 'System Maintenance - Purge Audit Records',
+                    'step_id' => 1,
+                    'step_name' => 'Identify old records & Delete',
+                    'run_status' => 'Succeeded',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                    'run_duration_sec' => 180,
+                    'message' => "Deleted 450,238 records from dbo.AuditTrail successfully."
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-3-CLEANUP',
+                    'job_name' => 'System Maintenance - Purge Audit Records',
+                    'step_id' => 2,
+                    'step_name' => 'Compress logs database',
+                    'run_status' => 'Failed',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                    'run_duration_sec' => 130,
+                    'message' => "Error 1105: Could not allocate space for object 'tempdb.dbo.#CleanTemp' because the 'PRIMARY' filegroup is full. Create disk space by deleting unneeded files, dropping objects in the filegroup, adding additional files to the filegroup, or setting autogrow on for existing files in the filegroup."
+                ],
+                [
+                    'job_id' => 'DEMO-JOB-3-CLEANUP',
+                    'job_name' => 'System Maintenance - Purge Audit Records',
+                    'step_id' => 0, // Outcome step
+                    'step_name' => '(Job Outcome)',
+                    'run_status' => 'Failed',
+                    'run_time' => date('Y-m-d H:i:s', strtotime('-2 hours')),
+                    'run_duration_sec' => 310,
+                    'message' => 'The job failed. The last step run was Step 2 (Compress logs database). The job was invoked by Schedule 2 (Daily Compliance Cleanup).'
+                ],
+            ];
+
+            $db->prepare("DELETE FROM agent_job_history WHERE server_id = ?")->execute([$serverId]);
+            $stmtJobHistInsert = $db->prepare("
+                INSERT INTO agent_job_history (
+                    server_id, collected_at, job_id, job_name, step_id, step_name, 
+                    run_status, run_time, run_duration_sec, message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            foreach ($mockJobHist as $mjh) {
+                $stmtJobHistInsert->execute([
+                    $serverId,
+                    $timestamp,
+                    $mjh['job_id'],
+                    $mjh['job_name'],
+                    $mjh['step_id'],
+                    $mjh['step_name'],
+                    $mjh['run_status'],
+                    $mjh['run_time'],
+                    $mjh['run_duration_sec'],
+                    $mjh['message']
+                ]);
+            }
+            
+            // Generate simulated Always On and Cluster metrics for DEMO
+            $hadrRole = ($serverId % 2 === 1) ? 'PRIMARY' : 'SECONDARY';
+            
+            // Delete old Always On records
+            $db->prepare("DELETE FROM alwayson_replicas WHERE server_id = ?")->execute([$serverId]);
+            $db->prepare("DELETE FROM alwayson_databases WHERE server_id = ?")->execute([$serverId]);
+            $db->prepare("DELETE FROM alwayson_cluster WHERE server_id = ?")->execute([$serverId]);
+            $db->prepare("DELETE FROM alwayson_cluster_members WHERE server_id = ?")->execute([$serverId]);
+            
+            // Replicas
+            $mockReplicas = [
+                [
+                    'ag_name' => 'PROD-AG-01',
+                    'replica' => 'PROD-SQL-01',
+                    'role' => 'PRIMARY',
+                    'op_state' => 'ONLINE',
+                    'conn_state' => 'CONNECTED',
+                    'health' => 'HEALTHY'
+                ],
+                [
+                    'ag_name' => 'PROD-AG-01',
+                    'replica' => 'PROD-SQL-02',
+                    'role' => 'SECONDARY',
+                    'op_state' => 'ONLINE',
+                    'conn_state' => 'CONNECTED',
+                    'health' => 'HEALTHY'
+                ]
+            ];
+            
+            $stmtRepInsert = $db->prepare("
+                INSERT INTO alwayson_replicas (
+                    server_id, collected_at, ag_name, replica_server_name, 
+                    role_desc, operational_state_desc, connected_state_desc, synchronization_health_desc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            foreach ($mockReplicas as $mr) {
+                $stmtRepInsert->execute([
+                    $serverId,
+                    $timestamp,
+                    $mr['ag_name'],
+                    $mr['replica'],
+                    $mr['role'],
+                    $mr['op_state'],
+                    $mr['conn_state'],
+                    $mr['health']
+                ]);
+            }
+            
+            // Databases
+            $mockDbs = [
+                [
+                    'ag_name' => 'PROD-AG-01',
+                    'db' => 'Production_DB',
+                    'sync_state' => 'SYNCHRONIZED',
+                    'sync_health' => 'HEALTHY',
+                    'send_q' => ($hadrRole === 'PRIMARY' ? 0.0 : null),
+                    'send_r' => ($hadrRole === 'PRIMARY' ? 145.5 : null),
+                    'redo_q' => ($hadrRole === 'SECONDARY' ? 0.0 : null),
+                    'redo_r' => ($hadrRole === 'SECONDARY' ? 142.2 : null)
+                ],
+                [
+                    'ag_name' => 'PROD-AG-01',
+                    'db' => 'HR_Portal',
+                    'sync_state' => 'SYNCHRONIZED',
+                    'sync_health' => 'HEALTHY',
+                    'send_q' => ($hadrRole === 'PRIMARY' ? 0.0 : null),
+                    'send_r' => ($hadrRole === 'PRIMARY' ? 24.8 : null),
+                    'redo_q' => ($hadrRole === 'SECONDARY' ? 0.0 : null),
+                    'redo_r' => ($hadrRole === 'SECONDARY' ? 24.5 : null)
+                ]
+            ];
+            $stmtDbInsert = $db->prepare("
+                INSERT INTO alwayson_databases (
+                    server_id, collected_at, ag_name, database_name, 
+                    synchronization_state_desc, synchronization_health_desc,
+                    log_send_queue_size, log_send_rate, redo_queue_size, redo_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            foreach ($mockDbs as $md) {
+                $stmtDbInsert->execute([
+                    $serverId,
+                    $timestamp,
+                    $md['ag_name'],
+                    $md['db'],
+                    $md['sync_state'],
+                    $md['sync_health'],
+                    $md['send_q'],
+                    $md['send_r'],
+                    $md['redo_q'],
+                    $md['redo_r']
+                ]);
+            }
+            
+            // Cluster
+            $stmtClustInsert = $db->prepare("
+                INSERT INTO alwayson_cluster (
+                    server_id, collected_at, cluster_name, quorum_type_desc, quorum_state_desc
+                ) VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmtClustInsert->execute([
+                $serverId,
+                $timestamp,
+                'PROD-WSFC-01',
+                'Node and Disk Majority',
+                'Normal Quorum'
+            ]);
+            
+            // Members
+            $mockMembers = [
+                ['name' => 'PROD-SQL-01', 'type' => 'Cluster Node', 'state' => 'Online', 'votes' => 1],
+                ['name' => 'PROD-SQL-02', 'type' => 'Cluster Node', 'state' => 'Online', 'votes' => 1],
+                ['name' => 'Q-Disk-01', 'type' => 'Disk Witness', 'state' => 'Online', 'votes' => 1]
+            ];
+            $stmtMemInsert = $db->prepare("
+                INSERT INTO alwayson_cluster_members (
+                    server_id, collected_at, member_name, member_type_desc, member_state_desc, number_of_quorum_votes
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            ");
+            foreach ($mockMembers as $mm) {
+                $stmtMemInsert->execute([
+                    $serverId,
+                    $timestamp,
+                    $mm['name'],
+                    $mm['type'],
+                    $mm['state'],
+                    $mm['votes']
+                ]);
+            }
+            
             $db->commit();
             $status = 'online';
             writeLog("Successfully populated simulated metrics.");
@@ -523,6 +820,20 @@ foreach ($servers as $srv) {
             writeLog("Connection established. Querying DMVs...");
             
             $db->beginTransaction();
+            
+            // 0. Fetch Availability Group Role (hadr_role)
+            $hadrRoleStmt = null;
+            try {
+                $hadrRoleStmt = $conn->query(SQL_QUERY_HADR_ROLE);
+                $hadrRow = $hadrRoleStmt->fetch();
+                $hadrRole = $hadrRow['role_desc'] ?? null;
+            } catch (Exception $e) {
+                writeLog("WARN: Failed to query local Hadron AG role: " . $e->getMessage());
+            } finally {
+                if ($hadrRoleStmt) {
+                    $hadrRoleStmt->closeCursor();
+                }
+            }
             
             // 1. Fetch CPU Usage
             $cpuPct = 0.0;
@@ -1013,6 +1324,214 @@ foreach ($servers as $srv) {
                 }
             }
             
+            // 8e. Query SQL Server Agent Job Status
+            $jobsStmt = null;
+            try {
+                writeLog("Querying SQL Server Agent jobs...");
+                $jobsStmt = $conn->query(SQL_QUERY_AGENT_JOBS);
+                $jobsList = [];
+                do {
+                    if ($jobsStmt && $jobsStmt->columnCount() > 0) {
+                        $jobsList = $jobsStmt->fetchAll();
+                        if (!empty($jobsList)) {
+                            break;
+                        }
+                    }
+                } while ($jobsStmt && $jobsStmt->nextRowset());
+                
+                if (!empty($jobsList)) {
+                    $db->prepare("DELETE FROM agent_job_status WHERE server_id = ?")->execute([$serverId]);
+                    
+                    $stmtJobInsert = $db->prepare("
+                        INSERT INTO agent_job_status (
+                            server_id, collected_at, job_id, job_name, enabled, description, 
+                            current_status, last_run_time, run_duration_sec, last_outcome_message
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    foreach ($jobsList as $j) {
+                        $stmtJobInsert->execute([
+                            $serverId,
+                            $timestamp,
+                            $j['job_id'],
+                            $j['job_name'],
+                            (int)$j['enabled'],
+                            $j['description'],
+                            $j['current_status'],
+                            $j['last_run_time'],
+                            $j['run_duration_sec'] !== null ? (int)$j['run_duration_sec'] : null,
+                            $j['last_outcome_message']
+                        ]);
+                    }
+                    writeLog("Successfully saved job status for " . count($jobsList) . " job(s).");
+                }
+            } catch (Exception $e) {
+                writeLog("WARN: Failed to query SQL Server Agent jobs: " . $e->getMessage());
+            } finally {
+                if ($jobsStmt) {
+                    $jobsStmt->closeCursor();
+                }
+            }
+            
+            // 8f. Query SQL Server Agent Job Step History
+            $jobHistStmt = null;
+            try {
+                writeLog("Querying SQL Server Agent job step history...");
+                $jobHistStmt = $conn->query(SQL_QUERY_AGENT_JOB_HISTORY);
+                $jobHistList = [];
+                do {
+                    if ($jobHistStmt && $jobHistStmt->columnCount() > 0) {
+                        $jobHistList = $jobHistStmt->fetchAll();
+                        if (!empty($jobHistList)) {
+                            break;
+                        }
+                    }
+                } while ($jobHistStmt && $jobHistStmt->nextRowset());
+                
+                if (!empty($jobHistList)) {
+                    $db->prepare("DELETE FROM agent_job_history WHERE server_id = ?")->execute([$serverId]);
+                    
+                    $stmtJobHistInsert = $db->prepare("
+                        INSERT INTO agent_job_history (
+                            server_id, collected_at, job_id, job_name, step_id, step_name, 
+                            run_status, run_time, run_duration_sec, message
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    foreach ($jobHistList as $jh) {
+                        $stmtJobHistInsert->execute([
+                            $serverId,
+                            $timestamp,
+                            $jh['job_id'],
+                            $jh['job_name'],
+                            (int)$jh['step_id'],
+                            $jh['step_name'],
+                            $jh['run_status'],
+                            $jh['run_time'],
+                            $jh['run_duration_sec'] !== null ? (int)$jh['run_duration_sec'] : null,
+                            $jh['message']
+                        ]);
+                    }
+                    writeLog("Successfully saved job step history for " . count($jobHistList) . " records.");
+                }
+            } catch (Exception $e) {
+                writeLog("WARN: Failed to query SQL Server Agent job step history: " . $e->getMessage());
+            } finally {
+                if ($jobHistStmt) {
+                    $jobHistStmt->closeCursor();
+                }
+            }
+            
+            // 8g. Query Always On status details (if Hadr role is not null)
+            if ($hadrRole !== null) {
+                writeLog("Always On Availability Group detected. Querying replica and cluster health...");
+                
+                // Delete previous entries
+                $db->prepare("DELETE FROM alwayson_replicas WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_databases WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_cluster WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_cluster_members WHERE server_id = ?")->execute([$serverId]);
+                
+                // Replicas
+                $repStmt = null;
+                try {
+                    $repStmt = $conn->query(SQL_QUERY_HADR_REPLICAS);
+                    $repList = $repStmt->fetchAll();
+                    $stmtRepInsert = $db->prepare("
+                        INSERT INTO alwayson_replicas (
+                            server_id, collected_at, ag_name, replica_server_name, 
+                            role_desc, operational_state_desc, connected_state_desc, synchronization_health_desc
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    foreach ($repList as $r) {
+                        $stmtRepInsert->execute([
+                            $serverId, $timestamp, $r['ag_name'], $r['replica_server_name'],
+                            $r['role_desc'], $r['operational_state_desc'], $r['connected_state_desc'], $r['synchronization_health_desc']
+                        ]);
+                    }
+                    writeLog("Saved " . count($repList) . " AG replica status records.");
+                } catch (Exception $e) {
+                    writeLog("WARN: Failed to query AG Replicas: " . $e->getMessage());
+                } finally {
+                    if ($repStmt) $repStmt->closeCursor();
+                }
+                
+                // Databases
+                $dbHadrStmt = null;
+                try {
+                    $dbHadrStmt = $conn->query(SQL_QUERY_HADR_DATABASES);
+                    $dbHadrList = $dbHadrStmt->fetchAll();
+                    $stmtDbInsert = $db->prepare("
+                        INSERT INTO alwayson_databases (
+                            server_id, collected_at, ag_name, database_name, 
+                            synchronization_state_desc, synchronization_health_desc,
+                            log_send_queue_size, log_send_rate, redo_queue_size, redo_rate
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    foreach ($dbHadrList as $d) {
+                        $stmtDbInsert->execute([
+                            $serverId, $timestamp, $d['ag_name'], $d['database_name'],
+                            $d['synchronization_state_desc'], $d['synchronization_health_desc'],
+                            $d['log_send_queue_size'], $d['log_send_rate'], $d['redo_queue_size'], $d['redo_rate']
+                        ]);
+                    }
+                    writeLog("Saved " . count($dbHadrList) . " AG database sync status records.");
+                } catch (Exception $e) {
+                    writeLog("WARN: Failed to query AG Databases: " . $e->getMessage());
+                } finally {
+                    if ($dbHadrStmt) $dbHadrStmt->closeCursor();
+                }
+                
+                // Cluster
+                $clusterStmt = null;
+                try {
+                    $clusterStmt = $conn->query(SQL_QUERY_HADR_CLUSTER);
+                    $clusterList = $clusterStmt->fetchAll();
+                    $stmtClustInsert = $db->prepare("
+                        INSERT INTO alwayson_cluster (
+                            server_id, collected_at, cluster_name, quorum_type_desc, quorum_state_desc
+                        ) VALUES (?, ?, ?, ?, ?)
+                    ");
+                    foreach ($clusterList as $c) {
+                        $stmtClustInsert->execute([
+                            $serverId, $timestamp, $c['cluster_name'], $c['quorum_type_desc'], $c['quorum_state_desc']
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    writeLog("WARN: Failed to query WSFC Cluster Info: " . $e->getMessage());
+                } finally {
+                    if ($clusterStmt) $clusterStmt->closeCursor();
+                }
+                
+                // Members
+                $membersStmt = null;
+                try {
+                    $membersStmt = $conn->query(SQL_QUERY_HADR_CLUSTER_MEMBERS);
+                    $membersList = $membersStmt->fetchAll();
+                    $stmtMemInsert = $db->prepare("
+                        INSERT INTO alwayson_cluster_members (
+                            server_id, collected_at, member_name, member_type_desc, member_state_desc, number_of_quorum_votes
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                    ");
+                    foreach ($membersList as $m) {
+                        $stmtMemInsert->execute([
+                            $serverId, $timestamp, $m['member_name'], $m['member_type_desc'], $m['member_state_desc'], $m['number_of_quorum_votes']
+                        ]);
+                    }
+                    writeLog("Saved " . count($membersList) . " WSFC cluster member records.");
+                } catch (Exception $e) {
+                    writeLog("WARN: Failed to query WSFC Members: " . $e->getMessage());
+                } finally {
+                    if ($membersStmt) $membersStmt->closeCursor();
+                }
+            } else {
+                // Delete any stale AG / WSFC status records if Always On is not configured or disabled
+                $db->prepare("DELETE FROM alwayson_replicas WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_databases WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_cluster WHERE server_id = ?")->execute([$serverId]);
+                $db->prepare("DELETE FROM alwayson_cluster_members WHERE server_id = ?")->execute([$serverId]);
+            }
+            
             $db->commit();
             $status = 'online';
             writeLog("Live collection run completed successfully.");
@@ -1028,8 +1547,8 @@ foreach ($servers as $srv) {
     
     // 9. Update server health checks status in inventory
     try {
-        $update = $db->prepare("UPDATE servers SET last_checked = ?, last_status = ? WHERE id = ?");
-        $update->execute([$timestamp, $status, $serverId]);
+        $update = $db->prepare("UPDATE servers SET last_checked = ?, last_status = ?, hadr_role = ? WHERE id = ?");
+        $update->execute([$timestamp, $status, $hadrRole, $serverId]);
     } catch (Exception $e) {
         writeLog("ERROR: Failed to update server status: " . $e->getMessage());
     }
@@ -1096,8 +1615,32 @@ try {
     $p9 = $db->prepare("DELETE FROM db_backup_stats WHERE collected_at < ?");
     $p9->execute([$purgeDate]);
     $c9 = $p9->rowCount();
+
+    $p10 = $db->prepare("DELETE FROM agent_job_status WHERE collected_at < ?");
+    $p10->execute([$purgeDate]);
+    $c10 = $p10->rowCount();
+
+    $p11 = $db->prepare("DELETE FROM agent_job_history WHERE collected_at < ?");
+    $p11->execute([$purgeDate]);
+    $c11 = $p11->rowCount();
     
-    writeLog("Purge complete. Records deleted: snapshots ($c1), waits ($c2), queries ($c3), indexes ($c4), blocks ($c5), db_files ($c6), alerts ($c7), deadlocks ($c8), backups ($c9).");
+    $p12 = $db->prepare("DELETE FROM alwayson_replicas WHERE collected_at < ?");
+    $p12->execute([$purgeDate]);
+    $c12 = $p12->rowCount();
+    
+    $p13 = $db->prepare("DELETE FROM alwayson_databases WHERE collected_at < ?");
+    $p13->execute([$purgeDate]);
+    $c13 = $p13->rowCount();
+    
+    $p14 = $db->prepare("DELETE FROM alwayson_cluster WHERE collected_at < ?");
+    $p14->execute([$purgeDate]);
+    $c14 = $p14->rowCount();
+    
+    $p15 = $db->prepare("DELETE FROM alwayson_cluster_members WHERE collected_at < ?");
+    $p15->execute([$purgeDate]);
+    $c15 = $p15->rowCount();
+    
+    writeLog("Purge complete. Records deleted: snapshots ($c1), waits ($c2), queries ($c3), indexes ($c4), blocks ($c5), db_files ($c6), alerts ($c7), deadlocks ($c8), backups ($c9), job_status ($c10), job_history ($c11), alwayson_replicas ($c12), alwayson_dbs ($c13), alwayson_cluster ($c14), alwayson_members ($c15).");
 } catch (Exception $e) {
     writeLog("WARN: Purge process failed: " . $e->getMessage());
 }

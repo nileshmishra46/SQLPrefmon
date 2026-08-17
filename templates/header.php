@@ -23,6 +23,25 @@ $pageTitle = $pageTitle ?? 'SQL Server Monitor';
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- App CSS -->
     <link rel="stylesheet" href="../assets/css/app.css">
+    <!-- Theme & Accent Loader -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('prefmon-theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.documentElement.classList.add('light-theme');
+            } else {
+                document.documentElement.classList.remove('light-theme');
+            }
+            
+            const savedAccent = localStorage.getItem('prefmon-accent');
+            if (savedAccent) {
+                const accent = JSON.parse(savedAccent);
+                document.documentElement.style.setProperty('--color-primary', accent.primary);
+                document.documentElement.style.setProperty('--color-primary-glow', accent.glow);
+                document.documentElement.style.setProperty('--color-primary-hover', accent.hover);
+            }
+        })();
+    </script>
 </head>
 <body>
     <div class="app-container">

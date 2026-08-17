@@ -254,11 +254,10 @@ textarea:focus {
     text-shadow: 0 0 8px var(--color-primary);
 }
 .sidebar-logo h1 {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
     font-weight: 700;
-    background: linear-gradient(135deg, #ffffff, #88c5ff);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #ffffff;
+    letter-spacing: 0.5px;
 }
 .sidebar-nav {
     flex: 1;
@@ -374,6 +373,12 @@ textarea:focus {
 }
 
 /* --- Grid Metrics --- */
+.metrics-grid, .metrics-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
 .metrics-grid-3 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -740,3 +745,239 @@ table.custom-table tbody tr:hover {
         padding: 1.25rem;
     }
 }
+
+/* --- Theme Customizer Drawer --- */
+.customizer-drawer {
+    position: fixed;
+    top: 0;
+    right: -320px;
+    width: 320px;
+    height: 100vh;
+    background: var(--bg-surface-opaque);
+    border-left: 1px solid var(--border-glass);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.25);
+    z-index: 2000;
+    transition: var(--transition-smooth);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+.customizer-drawer.open {
+    right: 0;
+}
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-glass);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+}
+.drawer-header h3 {
+    font-size: 1.2rem;
+    color: #ffffff;
+}
+.light-theme .drawer-header h3 {
+    color: #0f172a;
+}
+.drawer-header button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+.drawer-header button:hover {
+    color: #ffffff;
+}
+.light-theme .drawer-header button:hover {
+    color: #000000;
+}
+.customizer-section {
+    margin-bottom: 2rem;
+}
+.customizer-section h4 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+.theme-mode-options {
+    display: flex;
+    gap: 0.75rem;
+}
+.theme-mode-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    padding: 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: var(--transition-smooth);
+}
+.theme-mode-btn:hover, 
+.theme-mode-btn.active {
+    background: var(--color-primary-glow);
+    border-color: var(--color-primary);
+    color: #ffffff;
+}
+.accent-options-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.75rem;
+}
+.accent-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    position: relative;
+}
+.accent-btn:hover {
+    transform: scale(1.1);
+}
+.accent-btn.active {
+    border-color: #ffffff;
+    box-shadow: 0 0 10px var(--color-primary-glow);
+}
+.light-theme .accent-btn.active {
+    border-color: #0f172a;
+}
+.customizer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1999;
+    opacity: 0;
+    pointer-events: none;
+    transition: var(--transition-smooth);
+}
+.customizer-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* --- Light Theme overrides --- */
+.light-theme {
+    --bg-main: #f1f5f9;
+    --bg-surface: rgba(255, 255, 255, 0.7);
+    --bg-surface-opaque: #ffffff;
+    --bg-glass: rgba(255, 255, 255, 0.45);
+    
+    --border-glass: rgba(0, 0, 0, 0.08);
+    --border-glass-hover: rgba(0, 0, 0, 0.15);
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+}
+.light-theme h1, 
+.light-theme h2, 
+.light-theme h3, 
+.light-theme h4, 
+.light-theme h5, 
+.light-theme h6 {
+    color: #0f172a;
+}
+.light-theme .sidebar {
+    background: #ffffff;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+.light-theme .sidebar-logo h1 {
+    color: #0f172a;
+}
+.light-theme .nav-link {
+    color: #475569;
+}
+.light-theme .nav-link:hover, 
+.light-theme .nav-link.active {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--color-primary);
+}
+.light-theme .nav-section-title {
+    color: #94a3b8;
+}
+.light-theme .server-item {
+    color: #475569;
+}
+.light-theme .sidebar-user {
+    background: #f8fafc;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.light-theme .user-info-name {
+    color: #0f172a;
+}
+.light-theme .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+}
+.light-theme .data-table th {
+    background: #f8fafc;
+    color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+}
+.light-theme .data-table td {
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+}
+.light-theme .data-table tr:hover {
+    background: #f8fafc;
+}
+.light-theme .no-icon-input, 
+.light-theme input, 
+.light-theme select, 
+.light-theme textarea {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #0f172a;
+}
+.light-theme .no-icon-input:focus, 
+.light-theme input:focus, 
+.light-theme select:focus {
+    background: #ffffff;
+    border-color: var(--color-primary);
+}
+.light-theme .stat-card-details p {
+    color: #0f172a;
+}
+.light-theme .palette-icon:hover {
+    color: var(--color-primary);
+}
+
+/* Availability Group Role Badges */
+.badge-primary-role {
+    background-color: rgba(0, 136, 255, 0.15) !important;
+    color: var(--color-primary-hover) !important;
+    border: 1px solid var(--color-primary-glow) !important;
+}
+.badge-secondary-role {
+    background-color: rgba(156, 163, 175, 0.15) !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid rgba(156, 163, 175, 0.3) !important;
+}
+.light-theme .badge-primary-role {
+    background-color: rgba(0, 136, 255, 0.1) !important;
+    color: #0066cc !important;
+    border: 1px solid rgba(0, 136, 255, 0.25) !important;
+}
+.light-theme .badge-secondary-role {
+    background-color: rgba(71, 85, 105, 0.1) !important;
+    color: #475569 !important;
+    border: 1px solid rgba(71, 85, 105, 0.2) !important;
+}
+
+

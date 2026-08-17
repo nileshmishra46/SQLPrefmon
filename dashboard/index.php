@@ -149,11 +149,18 @@ try {
             ?>
                 <div class="glass-card server-card <?= $statusCardClass ?>">
                     <div class="server-card-header">
-                        <div class="server-card-title">
-                            <h3><?= sanitize($srv['display_name']) ?></h3>
+                        <div class="server-card-title" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <h3 style="margin: 0;"><?= sanitize($srv['display_name']) ?></h3>
                             <span class="badge <?= $srv['environment'] === 'production' ? 'env-production' : ($srv['environment'] === 'staging' ? 'env-staging' : ($srv['environment'] === 'dev' ? 'env-dev' : 'env-demo')) ?>">
                                 <?= sanitize($srv['environment']) ?>
                             </span>
+                            <?php if (!empty($srv['hadr_role'])): 
+                                $roleBadgeClass = strtolower($srv['hadr_role']) === 'primary' ? 'badge-primary-role' : 'badge-secondary-role';
+                            ?>
+                                <span class="badge <?= $roleBadgeClass ?>" style="font-size: 0.65rem;">
+                                    <?= sanitize($srv['hadr_role']) ?>
+                                </span>
+                            <?php endif; ?>
                         </div>
                         <span class="server-status-dot <?= $srv['last_status'] === 'online' ? 'status-online' : ($srv['last_status'] === 'error' ? 'status-offline' : 'status-offline') ?>"></span>
                     </div>
@@ -346,6 +353,11 @@ try {
 document.addEventListener("DOMContentLoaded", function() {
     const ctx = document.getElementById('globalWaitsChart');
     if (ctx) {
+        const isLight = document.documentElement.classList.contains('light-theme');
+        const labelColor = isLight ? '#0f172a' : '#ffffff';
+        const tickColor = isLight ? '#475569' : '#9ca3af';
+        const gridColor = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+
         new Chart(ctx, {
             type: 'bar',
             data: {
@@ -387,12 +399,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { color: '#9ca3af', font: { family: 'Inter' } }
+                        grid: { color: gridColor },
+                        ticks: { color: tickColor, font: { family: 'Inter' } }
                     },
                     y: {
                         grid: { display: false },
-                        ticks: { color: '#ffffff', font: { family: 'Inter', weight: 'bold' } }
+                        ticks: { color: labelColor, font: { family: 'Inter', weight: 'bold' } }
                     }
                 }
             }

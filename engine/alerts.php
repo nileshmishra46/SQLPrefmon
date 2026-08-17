@@ -42,7 +42,8 @@ function checkAndTriggerAlerts($serverId, $db, $latestStatus = 'online') {
             'disk_latency' => true,
             'blocking'     => true,
             'db_file_space'=> true,
-            'backups'      => true
+            'backups'      => true,
+            'agent_jobs'   => true
         ]),
         'db_file_space_threshold_pct' => (float)getAppSetting('db_file_space_threshold_pct', 10.0)
     ];
@@ -240,6 +241,46 @@ function checkAndTriggerAlerts($serverId, $db, $latestStatus = 'online') {
                 $isBackupBreached, 'Warning',
                 $msg,
                 "All database backups on [{$serverName}] are now healthy and up-to-date.",
+                $smtpSettings, $serverName, $env
+            );
+        }
+    }
+
+    // --- RULE 8: SQL Server Agent Job Failures ---
+    $jobRulesEnabled = $smtpSettings['rules']['agent_jobs'] ?? true;
+    if ($jobRulesEnabled) {
+        $latestJobsStmt = $db->prepare("
+            SELECT job_name, last_run_time, last_outcome_message 
+            FROM agent_job_status 
+            WHERE server_id = ? 
+              AND current_status = 'Failed'
+              AND collected_at = (SELECT MAX(collected_at) FROM agent_job_status WHERE server_id = ?)
+        ");
+        $latestJobsStmt->execute([$serverId, $serverId]);
+        $failedJobs = $latestJobsStmt->fetchAll();
+        
+        $isJobBreached = !empty($failedJobs);
+        
+        if ($isJobBreached) {
+            $failedList = [];
+            foreach ($failedJobs as $fj) {
+                $failedList[] = "Job: {$fj['job_name']} | Last Run: {$fj['last_run_time']} | Error: " . ($fj['last_outcome_message'] ? substr($fj['last_outcome_message'], 0, 200) . '...' : 'Unknown error');
+            }
+            $msg = "Failed SQL Server Agent jobs detected on [{$serverName}]:\n" . implode("\n", $failedList);
+            
+            evaluateAlertState(
+                $serverId, $db, 'SQL Agent Jobs', 
+                $isJobBreached, 'Critical',
+                $msg,
+                "All SQL Server Agent jobs on [{$serverName}] are now running successfully or idle.",
+                $smtpSettings, $serverName, $env
+            );
+        } else {
+            evaluateAlertState(
+                $serverId, $db, 'SQL Agent Jobs', 
+                false, 'Critical',
+                "",
+                "All SQL Server Agent jobs on [{$serverName}] are now running successfully or idle.",
                 $smtpSettings, $serverName, $env
             );
         }
