@@ -43,7 +43,9 @@ function checkAndTriggerAlerts($serverId, $db, $latestStatus = 'online') {
             'blocking'     => true,
             'db_file_space'=> true,
             'backups'      => true,
-            'agent_jobs'   => true
+            'agent_jobs'   => true,
+            'alwayson_health' => true,
+            'cluster_health'  => true
         ]),
         'db_file_space_threshold_pct' => (float)getAppSetting('db_file_space_threshold_pct', 10.0)
     ];
@@ -284,6 +286,130 @@ function checkAndTriggerAlerts($serverId, $db, $latestStatus = 'online') {
                 $smtpSettings, $serverName, $env
             );
         }
+    }
+
+    // --- RULE 9: Always On Availability Group Replica Health ---
+    $alwaysonRulesEnabled = $smtpSettings['rules']['alwayson_health'] ?? true;
+    if ($alwaysonRulesEnabled) {
+        $agHealthStmt = $db->prepare("
+            SELECT ag_name, replica_server_name, role_desc, operational_state_desc, connected_state_desc, synchronization_health_desc 
+            FROM alwayson_replicas 
+            WHERE server_id = ? 
+              AND collected_at = (SELECT MAX(collected_at) FROM alwayson_replicas WHERE server_id = ?)
+        ");
+        $agHealthStmt->execute([$serverId, $serverId]);
+        $replicas = $agHealthStmt->fetchAll();
+        
+        $unhealthyReplicas = [];
+        foreach ($replicas as $r) {
+            $isUnhealthy = false;
+            $reason = [];
+            if ($r['operational_state_desc'] !== null && strtolower($r['operational_state_desc']) !== 'online') {
+                $isUnhealthy = true;
+                $reason[] = "operational state is " . $r['operational_state_desc'];
+            }
+            if ($r['connected_state_desc'] !== null && strtolower($r['connected_state_desc']) !== 'connected') {
+                $isUnhealthy = true;
+                $reason[] = "connection state is " . $r['connected_state_desc'];
+            }
+            if ($r['synchronization_health_desc'] !== null && strtolower($r['synchronization_health_desc']) === 'not_healthy') {
+                $isUnhealthy = true;
+                $reason[] = "synchronization health is NOT HEALTHY";
+            }
+            
+            if ($isUnhealthy) {
+                $unhealthyReplicas[] = "Replica [{$r['replica_server_name']}] in AG [{$r['ag_name']}] ({$r['role_desc']}): " . implode(', ', $reason);
+            }
+        }
+        
+        // Also check if any database has NOT_HEALTHY or is in a suspended/non-synchronizing state
+        $agDbStmt = $db->prepare("
+            SELECT ag_name, database_name, synchronization_state_desc, synchronization_health_desc 
+            FROM alwayson_databases 
+            WHERE server_id = ? 
+              AND collected_at = (SELECT MAX(collected_at) FROM alwayson_databases WHERE server_id = ?)
+        ");
+        $agDbStmt->execute([$serverId, $serverId]);
+        $agDbs = $agDbStmt->fetchAll();
+        
+        foreach ($agDbs as $ad) {
+            $dbUnhealthy = false;
+            $dbReason = [];
+            if ($ad['synchronization_state_desc'] !== null && in_array(strtolower($ad['synchronization_state_desc']), ['not synchronizing', 'suspended'])) {
+                $dbUnhealthy = true;
+                $dbReason[] = "sync state is " . $ad['synchronization_state_desc'];
+            }
+            if ($ad['synchronization_health_desc'] !== null && strtolower($ad['synchronization_health_desc']) === 'not_healthy') {
+                $dbUnhealthy = true;
+                $dbReason[] = "sync health is NOT HEALTHY";
+            }
+            
+            if ($dbUnhealthy) {
+                $unhealthyReplicas[] = "Database [{$ad['database_name']}] in AG [{$ad['ag_name']}]: " . implode(', ', $dbReason);
+            }
+        }
+        
+        $isAgBreached = !empty($unhealthyReplicas);
+        $msg = "Always On Availability Group replication anomalies detected on [{$serverName}]:\n" . implode("\n", $unhealthyReplicas);
+        
+        evaluateAlertState(
+            $serverId, $db, 'Always On AG Health', 
+            $isAgBreached, 'Critical',
+            $msg,
+            "Always On Availability Group replication on [{$serverName}] has returned to fully healthy status.",
+            $smtpSettings, $serverName, $env
+        );
+    }
+
+    // --- RULE 10: Failover Cluster & Quorum Health ---
+    $clusterRulesEnabled = $smtpSettings['rules']['cluster_health'] ?? true;
+    if ($clusterRulesEnabled) {
+        $clusterHealthStmt = $db->prepare("
+            SELECT cluster_name, quorum_state_desc 
+            FROM alwayson_cluster 
+            WHERE server_id = ? 
+              AND collected_at = (SELECT MAX(collected_at) FROM alwayson_cluster WHERE server_id = ?)
+            LIMIT 1
+        ");
+        $clusterHealthStmt->execute([$serverId, $serverId]);
+        $cluster = $clusterHealthStmt->fetch();
+        
+        $clusterAnomalies = [];
+        $isClusterBreached = false;
+        
+        if ($cluster) {
+            if ($cluster['quorum_state_desc'] !== null && !in_array(strtolower($cluster['quorum_state_desc']), ['normal quorum', 'normal'])) {
+                $isClusterBreached = true;
+                $clusterAnomalies[] = "WSFC Quorum State is degraded: {$cluster['quorum_state_desc']}.";
+            }
+            
+            // Query member nodes status
+            $memberHealthStmt = $db->prepare("
+                SELECT member_name, member_type_desc, member_state_desc 
+                FROM alwayson_cluster_members 
+                WHERE server_id = ? 
+                  AND collected_at = (SELECT MAX(collected_at) FROM alwayson_cluster_members WHERE server_id = ?)
+            ");
+            $memberHealthStmt->execute([$serverId, $serverId]);
+            $members = $memberHealthStmt->fetchAll();
+            
+            foreach ($members as $m) {
+                if ($m['member_state_desc'] !== null && strtolower($m['member_state_desc']) !== 'online') {
+                    $isClusterBreached = true;
+                    $clusterAnomalies[] = "WSFC Node [{$m['member_name']}] ({$m['member_type_desc']}) state is: {$m['member_state_desc']}.";
+                }
+            }
+        }
+        
+        $msg = "Windows Server Failover Cluster (WSFC) health anomalies detected on [{$serverName}]:\n" . implode("\n", $clusterAnomalies);
+        
+        evaluateAlertState(
+            $serverId, $db, 'WSFC Quorum Health', 
+            $isClusterBreached, 'Critical',
+            $msg,
+            "Failover cluster quorum and all member nodes on [{$serverName}] have returned to online status.",
+            $smtpSettings, $serverName, $env
+        );
     }
 }
 
