@@ -172,8 +172,8 @@ if ($selectedJobId !== null) {
                 </div>
             </div>
         <?php else: ?>
-            <div style="overflow-y: auto; max-height: 550px;">
-                <table class="data-table">
+            <div class="table-responsive" style="margin-top: 0; overflow-y: auto; max-height: 550px;">
+                <table class="custom-table">
                     <thead>
                         <tr>
                             <th>Job Name</th>
@@ -190,7 +190,7 @@ if ($selectedJobId !== null) {
                         ?>
                             <tr <?= $selectedRowStyle ?>>
                                 <td>
-                                    <strong title="<?= sanitize($j['description'] ?? '') ?>"><?= sanitize($j['job_name']) ?></strong>
+                                    <strong style="color: var(--text-primary);" title="<?= sanitize($j['description'] ?? '') ?>"><?= sanitize($j['job_name']) ?></strong>
                                 </td>
                                 <td>
                                     <?php if ($j['enabled']): ?>
@@ -311,7 +311,7 @@ if ($selectedJobId !== null) {
                         <div class="glass-card" style="margin-bottom: 1.25rem; padding: 1rem; <?= $runHeaderBg ?> <?= $runHeaderBorder ?> border-radius: 6px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
                                 <div>
-                                    <span style="font-weight: 600; font-size: 0.85rem; color: #ffffff;">
+                                    <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">
                                         Run: <?= date('Y-m-d H:i:s', strtotime($timeKey)) ?>
                                     </span>
                                     <small style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem;">
@@ -337,7 +337,7 @@ if ($selectedJobId !== null) {
                                 ?>
                                     <div style="background: <?= $stepBg ?>; border: <?= $stepBorder ?>; padding: 0.75rem; border-radius: 4px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                            <span style="font-size: 0.8rem; font-weight: 600; color: #ffffff;">
+                                            <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">
                                                 Step <?= $st['step_id'] ?>: <?= sanitize($st['step_name']) ?>
                                             </span>
                                             <div style="display: flex; align-items: center; gap: 0.5rem;">

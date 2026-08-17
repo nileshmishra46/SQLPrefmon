@@ -192,8 +192,8 @@ function formatSize($mb) {
                 No databases or backup status logs found. Ensure collector scheduling runs successfully.
             </div>
         <?php else: ?>
-            <div style="overflow-x: auto;">
-                <table class="data-table">
+            <div class="table-responsive" style="margin-top: 0;">
+                <table class="custom-table">
                     <thead>
                         <tr>
                             <th>Database</th>
@@ -207,9 +207,9 @@ function formatSize($mb) {
                     <tbody>
                         <?php foreach ($backups as $b): ?>
                             <tr>
-                                <td><strong><?= sanitize($b['database_name']) ?></strong></td>
+                                <td><strong style="color: var(--text-primary);"><?= sanitize($b['database_name']) ?></strong></td>
                                 <td>
-                                    <span class="db-badge badge-info" style="font-size: 0.75rem;"><?= sanitize($b['recovery_model']) ?></span>
+                                     <span class="db-badge badge-info" style="font-size: 0.75rem;"><?= sanitize($b['recovery_model']) ?></span>
                                 </td>
                                 <td>
                                     <?php if (empty($b['last_full_backup'])): ?>
@@ -218,7 +218,7 @@ function formatSize($mb) {
                                         </span>
                                     <?php else: 
                                         $fullAgeHours = ($now - strtotime($b['last_full_backup'])) / 3600;
-                                        $fullColor = ($fullAgeHours > $fullThresh) ? 'var(--color-warning)' : '#ffffff';
+                                        $fullColor = ($fullAgeHours > $fullThresh) ? 'var(--color-warning)' : 'var(--text-primary)';
                                     ?>
                                         <span style="color: <?= $fullColor ?>;">
                                             <?= date('Y-m-d H:i', strtotime($b['last_full_backup'])) ?>
@@ -235,7 +235,7 @@ function formatSize($mb) {
                                         </span>
                                     <?php else: 
                                         $diffAgeHours = ($now - strtotime($b['last_diff_backup'])) / 3600;
-                                        $diffColor = ($diffAgeHours > $diffThresh) ? 'var(--color-warning)' : '#ffffff';
+                                        $diffColor = ($diffAgeHours > $diffThresh) ? 'var(--color-warning)' : 'var(--text-primary)';
                                     ?>
                                         <span style="color: <?= $diffColor ?>;">
                                             <?= date('Y-m-d H:i', strtotime($b['last_diff_backup'])) ?>
@@ -256,7 +256,7 @@ function formatSize($mb) {
                                         </span>
                                     <?php else: 
                                         $logAgeHours = ($now - strtotime($b['last_log_backup'])) / 3600;
-                                        $logColor = ($logAgeHours > $logThresh) ? 'var(--color-warning)' : '#ffffff';
+                                        $logColor = ($logAgeHours > $logThresh) ? 'var(--color-warning)' : 'var(--text-primary)';
                                     ?>
                                         <span style="color: <?= $logColor ?>;">
                                             <?= date('Y-m-d H:i', strtotime($b['last_log_backup'])) ?>
