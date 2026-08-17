@@ -158,7 +158,7 @@ if ($selectedJobId !== null) {
 
 <div class="grid-3 animate-fade-in" style="grid-template-columns: 1.4fr 1.6fr; gap: 1.5rem; animation-delay: 0.15s; margin-bottom: 1.5rem;">
     <!-- Job Inventory List -->
-    <div class="glass-card" style="padding: 1.5rem; display: flex; flex-direction: column; min-height: 450px;">
+    <div class="glass-card" style="padding: 1.5rem; display: flex; flex-direction: column; min-height: 450px; margin-bottom: 1.5rem;">
         <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">
             <i class="fa-solid fa-clipboard-list" style="color: var(--color-primary); margin-right: 0.5rem;"></i>
             Job Inventory Status

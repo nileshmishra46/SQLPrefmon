@@ -181,7 +181,7 @@ function formatSize($mb) {
 
 <div class="grid-3 animate-fade-in" style="grid-template-columns: 2.2fr 0.8fr; gap: 1.5rem; animation-delay: 0.15s; margin-bottom: 1.5rem;">
     <!-- Backup status list table -->
-    <div class="glass-card" style="padding: 1.5rem;">
+    <div class="glass-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">
             <i class="fa-solid fa-list-check" style="color: var(--color-primary); margin-right: 0.5rem;"></i>
             Database Backup Inventory Age
