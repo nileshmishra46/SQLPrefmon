@@ -181,6 +181,18 @@ CREATE TABLE #FileStats (
     used_space_mb REAL
 );
 
+-- Pre-populate all files from sys.master_files for ONLINE databases
+INSERT INTO #FileStats (database_name, file_name, file_type, physical_name, total_size_mb, used_space_mb)
+SELECT 
+    DB_NAME(database_id),
+    name,
+    type_desc,
+    physical_name,
+    size * 8.0 / 1024.0,
+    NULL -- Will update this value if we can access the database
+FROM sys.master_files
+WHERE DB_NAME(database_id) IN (SELECT name FROM sys.databases WHERE state_desc = 'ONLINE');
+
 DECLARE db_cursor CURSOR FOR
 SELECT name FROM sys.databases WHERE state_desc = 'ONLINE';
 
@@ -191,21 +203,17 @@ WHILE @@FETCH_STATUS = 0
 BEGIN
     SET @sql = '
     USE [' + REPLACE(@db_name, ']', ']]') + '];
-    INSERT INTO #FileStats (database_name, file_name, file_type, physical_name, total_size_mb, used_space_mb)
-    SELECT 
-        DB_NAME(),
-        name,
-        type_desc,
-        physical_name,
-        size * 8.0 / 1024.0,
-        CAST(FILEPROPERTY(name, ''SpaceUsed'') AS FLOAT) * 8.0 / 1024.0
-    FROM sys.database_files;';
+    UPDATE f
+    SET f.used_space_mb = CAST(FILEPROPERTY(f.file_name, ''SpaceUsed'') AS FLOAT) * 8.0 / 1024.0
+    FROM #FileStats f
+    JOIN sys.database_files df ON f.file_name = df.name
+    WHERE f.database_name = DB_NAME();';
     
     BEGIN TRY
         EXEC(@sql);
     END TRY
     BEGIN CATCH
-        -- Ignore databases we cannot access
+        -- Ignore databases we cannot access, used_space_mb remains NULL
     END CATCH
 
     FETCH NEXT FROM db_cursor INTO @db_name;
@@ -220,10 +228,10 @@ SELECT
     file_type,
     physical_name,
     total_size_mb,
-    used_space_mb,
-    (total_size_mb - used_space_mb) AS free_space_mb,
+    ISNULL(used_space_mb, 0.0) AS used_space_mb, -- Safe fallback to 0.0 used space if inaccessible
+    (total_size_mb - ISNULL(used_space_mb, 0.0)) AS free_space_mb,
     CASE 
-        WHEN total_size_mb > 0 THEN ((total_size_mb - used_space_mb) / total_size_mb) * 100.0 
+        WHEN total_size_mb > 0 THEN ((total_size_mb - ISNULL(used_space_mb, 0.0)) / total_size_mb) * 100.0 
         ELSE 0.0 
     END AS free_space_pct
 FROM #FileStats;
