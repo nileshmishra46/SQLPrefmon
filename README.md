@@ -61,8 +61,6 @@ Here are the screenshots showcasing the SQLPrefmon sidebar menu and user interfa
 ![Alert Center](assets/screenshots/Screenshot%2012.png)
 *Unified alert management dashboard showing critical thresholds, active alerts, and historical warning events.*
 
----
-
 ## ✨ Features
 
 - **Multi-Instance Dashboard:** Monitor multiple SQL Server instances from a single unified control panel.
@@ -70,23 +68,15 @@ Here are the screenshots showcasing the SQLPrefmon sidebar menu and user interfa
 - **Deep DMV Performance Diagnostics:**
   - **Memory:** Page Life Expectancy (PLE) trends, buffer pool usage, query memory grants.
   - **CPU:** SQL Compilation/Re-compilation rates, scheduler yield wait statistics.
-  - **Disk Latency:** Average read/write latency metrics per database file.
-  - **Locks & Blocking:** Real-time active blocking chains, deadlock statistics, and wait times.
+  - **Disk & Storage:** In-depth disk space monitoring for individual database files (`.mdf` and `.ldf`), growth patterns, and average read/write latencies.
+  - **Locks, Blocking & Deadlocks:** Real-time active blocking chains, detailed deadlock event logs highlighting victim queries and graphs.
   - **Wait Stats:** Ranks top bottlenecking wait types (e.g., `CXPACKET`, `PAGEIOLATCH_SH`, `LCK_M_X`).
+- **Additional Monitoring Modules:**
+  - **Backup Auditing:** Analyzes backup history (Full, Differential, Transaction Log) to flag stale or missing backups.
+  - **Agent Jobs:** Real-time monitoring of SQL Server Agent job statuses and failure history.
+  - **Always On & Clusters:** Tracks synchronization status, health, and failover state of Availability Groups and failover cluster instances.
 - **Secure Credentials:** SQL Server passwords are encrypted using industry-standard AES-256 encryption via OpenSSL before database storage.
 - **Low Footprint:** Built on PHP and SQLite—no external heavy monitoring agents or database engine installations required on the target databases.
-
----
-
-## 🔮 Upcoming Features
-
-The following features are planned for future updates:
-
-1. **Deadlock Monitoring:** Real-time tracking and visualization of deadlock events, victim details, and contributing queries.
-2. **Backup Monitoring:** Audit database backup history (Full, Differential, Transaction Log) and generate alerts for stale or missing backups.
-3. **MDF and LDF Free Space Monitoring:** Proactive monitoring of database file growth, individual `.mdf` and `.ldf` file sizes, and warning alerts for low disk capacity.
-4. **Email Notifications:** Automatic alert routing via SMTP configuration for critical server status and performance issues.
-5. **Agent Job Failure Monitoring:** Detailed reporting of SQL Server Agent job statuses, failure alerts, and step-by-step error analysis.
 
 ---
 
