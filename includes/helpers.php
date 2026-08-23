@@ -143,9 +143,9 @@ function logAuditEvent($userId, $action, $targetType = null, $targetId = null, $
 }
 
 // Read application dynamic settings with global constants fallback
-function getAppSetting($key, $default) {
+function getAppSetting($key, $default, $forceReload = false) {
     static $settings = null;
-    if ($settings === null) {
+    if ($settings === null || $forceReload) {
         $path = dirname(__DIR__) . '/config/settings.json';
         if (file_exists($path)) {
             $settings = json_decode(file_get_contents($path), true);

@@ -11,36 +11,55 @@
 
 ## 📸 Screenshots
 
-Here are some screenshots showcasing the SQLPrefmon user interface:
+Here are the screenshots showcasing the SQLPrefmon sidebar menu and user interface pages:
 
 ### 1. Dashboard Overview
-![Dashboard Summary](assets/screenshots/screenshot1.png)
-*Real-time monitoring status of all registered SQL Server instances.*
+![Dashboard Summary](assets/screenshots/Screenshot%201.png)
+*Real-time monitoring status, resource summary, and health checks of all registered SQL Server instances.*
 
-### 2. Tunning Recommendations
-![Server Detail](assets/screenshots/screenshot2.png)
-*Server wise tunning recommendations. *
+### 2. Active Servers
+![Active Servers](assets/screenshots/Screenshot%202.png)
+*Detailed view of currently active SQL Server instances under monitoring, showing connection status and environment details.*
 
-### 3. Historical Trends
-![Tuning Recommendations](assets/screenshots/screenshot3.png)
-*Historical trends.*
+### 3. Tuning Recommendations
+![Tuning Recommendations](assets/screenshots/Screenshot%203.png)
+*Automated tuning advisor suggestions, showing indexing recommendations, server configuration adjustments, and database optimization tips.*
 
-### 4. Historical Trends with list of all the metrics
-![Blocking History](assets/screenshots/screenshot4.png)
-*Historical trends will be present for all the listed metrics.*
+### 4. Historical Trends
+![Historical Trends](assets/screenshots/Screenshot%204.png)
+*Longitudinal graphs and charts plotting historical performance metrics like CPU, memory, PLE, and compilation rates over time.*
 
-### 5. Captured sql statements along with execution plan
-![Query Performance](assets/screenshots/screenshot5.png)
-*Captured SQL Statements along with downloadable execution plan for further analysis.*
+### 5. Query History
+![Query History](assets/screenshots/Screenshot%205.png)
+*Captured SQL statements with execution metrics (duration, CPU, reads/writes) and execution plan options.*
 
-### 6. Blocking Analysis
-![Instance Management](assets/screenshots/screenshot6.png)
-*Blocking analysis for selected server.*
+### 6. Blocking Log
+![Blocking Log](assets/screenshots/Screenshot%206.png)
+*Historical and real-time blocking chains tracking lock contention, blocking sessions, and blocked queries.*
 
-### 7. Administrative settings
-![Settings](assets/screenshots/screenshot7.png)
-*Administration configuration and user creation settings.*
+### 7. Deadlocks Log
+![Deadlocks Log](assets/screenshots/Screenshot%207.png)
+*Deadlock events monitoring, documenting victim queries, graphs, and troubleshooting metrics.*
 
+### 8. DB File Analysis
+![DB File Analysis](assets/screenshots/Screenshot%208.png)
+*In-depth disk space and latency metrics per database file (.mdf and .ldf), highlighting disk performance bottlenecks.*
+
+### 9. Backup Monitoring
+![Backup Monitoring](assets/screenshots/Screenshot%209.png)
+*Audit logs and status alerts for database backups (Full, Differential, Transaction Log) ensuring disaster recovery readiness.*
+
+### 10. Agent Job Status
+![Agent Job Status](assets/screenshots/Screenshot%2010.png)
+*Detailed status, execution history, and error details of SQL Server Agent jobs.*
+
+### 11. Always On & Cluster
+![Always On & Cluster](assets/screenshots/Screenshot%2011.png)
+*Health, synchronization status, and failover state of Always On Availability Groups and failover cluster instances.*
+
+### 12. Alert Center
+![Alert Center](assets/screenshots/Screenshot%2012.png)
+*Unified alert management dashboard showing critical thresholds, active alerts, and historical warning events.*
 
 ---
 

@@ -58,9 +58,9 @@ define('SQL_QUERY_LATENCY_LOCKS', "
         (SELECT SUM(io_stall_read_ms) FROM sys.dm_io_virtual_file_stats(NULL, NULL)) AS stall_reads_ms,
         (SELECT SUM(num_of_writes) FROM sys.dm_io_virtual_file_stats(NULL, NULL)) AS num_writes,
         (SELECT SUM(io_stall_write_ms) FROM sys.dm_io_virtual_file_stats(NULL, NULL)) AS stall_writes_ms,
-        (SELECT SUM(user_connection_count) FROM sys.dm_db_file_space_usage, (SELECT COUNT(*) AS user_connection_count FROM sys.dm_exec_sessions WHERE is_user_process = 1) AS conn) AS active_conn,
+        (SELECT COUNT(*) FROM sys.dm_exec_sessions WHERE is_user_process = 1) AS active_conn,
         (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id <> 0) AS blocked_procs,
-        (SELECT SUM(allocated_page_file_pages) * 8.0 / 1024.0 FROM sys.dm_db_file_space_usage) AS tempdb_used_mb
+        (SELECT SUM(user_object_reserved_page_count + internal_object_reserved_page_count + version_store_reserved_page_count + mixed_extent_page_count) * 8.0 / 1024.0 FROM tempdb.sys.dm_db_file_space_usage) AS tempdb_used_mb
 ");
 
 // 5. System Waits Query (Top 10 resource bottlenecks)
@@ -438,6 +438,52 @@ BEGIN
     FROM sys.dm_hadr_cluster_members
 END
 ");
+
+// 19. High-Frequency Active Session Polling Query
+define("SQL_QUERY_ACTIVE_SESSIONS", "
+    SELECT 
+        CAST(r.session_id AS INT) AS session_id,
+        CAST(r.status AS VARCHAR(50)) AS status,
+        CAST(r.command AS VARCHAR(50)) AS command,
+        CAST(ISNULL(NULLIF(r.wait_type, ''), 'CPU') AS VARCHAR(100)) AS wait_type,
+        CAST(r.wait_time AS INT) AS wait_time_ms,
+        CAST(SUBSTRING(st.text, (r.statement_start_offset/2)+1, 
+            ((CASE r.statement_end_offset 
+                WHEN -1 THEN DATALENGTH(st.text) 
+                ELSE r.statement_end_offset 
+              END - r.statement_start_offset)/2) + 1) AS NVARCHAR(MAX)) AS query_text,
+        CAST(DB_NAME(r.database_id) AS VARCHAR(100)) AS database_name,
+        CONVERT(VARCHAR(30), r.query_hash, 1) AS query_hash,
+        CAST(qp.query_plan AS NVARCHAR(MAX)) AS query_plan,
+        qs.total_worker_time / 1000.0 AS total_cpu_ms,
+        qs.total_elapsed_time / 1000.0 AS total_elapsed_ms,
+        qs.total_logical_reads AS total_logical_reads,
+        qs.execution_count AS execution_count,
+        CASE WHEN qs.execution_count > 0 THEN (qs.total_worker_time / 1000.0) / qs.execution_count ELSE 0.0 END AS avg_cpu_ms,
+        CASE WHEN qs.execution_count > 0 THEN (qs.total_elapsed_time / 1000.0) / qs.execution_count ELSE 0.0 END AS avg_elapsed_ms,
+        CASE WHEN qs.execution_count > 0 THEN (qs.total_logical_reads * 1.0) / qs.execution_count ELSE 0.0 END AS avg_logical_reads,
+        r.blocking_session_id AS blocking_session_id,
+        r.wait_resource AS resource_description,
+        ISNULL(st_blocking.text, '(Idle Transaction or Blocker SQL unavailable)') AS blocking_sql
+    FROM sys.dm_exec_requests r
+    CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) st
+    OUTER APPLY sys.dm_exec_query_plan(r.plan_handle) qp
+    OUTER APPLY (
+        SELECT TOP 1 * 
+        FROM sys.dm_exec_query_stats 
+        WHERE sql_handle = r.sql_handle 
+          AND statement_start_offset = r.statement_start_offset 
+          AND statement_end_offset = r.statement_end_offset
+    ) qs
+    OUTER APPLY (
+        SELECT TOP 1 st_b.text
+        FROM sys.dm_exec_connections conn_b
+        CROSS APPLY sys.dm_exec_sql_text(conn_b.most_recent_sql_handle) st_b
+        WHERE conn_b.session_id = r.blocking_session_id
+    ) st_blocking
+    WHERE r.session_id <> @@SPID AND r.session_id > 50
+");
+
 
 
 

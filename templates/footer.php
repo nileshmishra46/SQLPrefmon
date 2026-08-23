@@ -50,6 +50,20 @@
                 console.error('Failed to copy: ', err);
             });
         }
+
+        <?php if (isset($_SESSION['user_id']) && (getAppSetting('scheduler_enabled', false) || getAppSetting('poller_enabled', false))): ?>
+        // Trigger background scheduler check
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('../api/trigger_scheduler.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'triggered') {
+                        console.log('SQLPrefmon Background Scheduler: Metric collection triggered.');
+                    }
+                })
+                .catch(err => console.error('SQLPrefmon Background Scheduler error:', err));
+        });
+        <?php endif; ?>
     </script>
 </body>
 </html>

@@ -46,11 +46,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'export_csv') {
     
     $exportQuery = "
         SELECT * FROM metric_snapshots 
-        WHERE server_id = ? AND collected_at >= datetime('now', ?) 
+        WHERE server_id = :server_id AND collected_at >= datetime('now', :interval) 
         ORDER BY collected_at ASC
     ";
     $stmtExp = $db->prepare($exportQuery);
-    $stmtExp->execute([$exportServer, $intervalStr]);
+    $stmtExp->execute([
+        ':server_id' => $exportServer,
+        ':interval' => $intervalStr
+    ]);
     
     while ($row = $stmtExp->fetch(PDO::FETCH_ASSOC)) {
         fputcsv($output, [

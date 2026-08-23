@@ -107,12 +107,85 @@ a:hover {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+    background: radial-gradient(circle at center, #111827 0%, #030712 100%),
+                radial-gradient(circle at top right, rgba(0, 136, 255, 0.1), transparent 45%);
+    transition: var(--transition-smooth);
 }
 .login-container {
     width: 100%;
     max-width: 440px;
     padding: 1.5rem;
+}
+.login-card {
+    padding: 2.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 136, 255, 0.05);
+}
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+.login-logo-circle {
+    width: 72px;
+    height: 72px;
+    background: radial-gradient(circle, rgba(0, 136, 255, 0.2) 0%, rgba(0, 136, 255, 0.02) 100%);
+    border: 1.5px solid var(--color-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.25rem auto;
+    box-shadow: 0 0 20px var(--color-primary-glow);
+    animation: pulseGlow 3s infinite ease-in-out;
+}
+.database-glow-icon {
+    font-size: 2rem;
+    color: var(--color-primary);
+    filter: drop-shadow(0 0 8px var(--color-primary));
+}
+.login-header h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, #ffffff 0%, #a5f3fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.03em;
+}
+.login-header p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 15px var(--color-primary-glow);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(0, 136, 255, 0.60);
+        transform: scale(1.03);
+    }
+}
+
+/* Light Theme overrides for Login */
+.light-theme .login-body {
+    background: radial-gradient(circle at center, #f8fafc 0%, #e2e8f0 100%),
+                radial-gradient(circle at top right, rgba(0, 136, 255, 0.08), transparent 45%);
+}
+.light-theme .login-card {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08), 0 0 20px rgba(0, 136, 255, 0.03);
+}
+.light-theme .login-header h2 {
+    background: linear-gradient(135deg, #0f172a 0%, #0369a1 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.light-theme .login-logo-circle {
+    background: radial-gradient(circle, rgba(0, 136, 255, 0.1) 0%, rgba(0, 136, 255, 0.01) 100%);
+    box-shadow: 0 0 15px rgba(0, 136, 255, 0.15);
 }
 
 /* --- Glassmorphism Cards --- */
@@ -129,10 +202,6 @@ a:hover {
 .glass-card:hover {
     border-color: var(--border-glass-hover);
     box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
-}
-
-.login-card {
-    padding: 2.5rem;
 }
 
 /* --- Forms & Controls --- */

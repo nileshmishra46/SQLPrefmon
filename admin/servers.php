@@ -38,15 +38,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';
             $environment = $_POST['environment'] ?? 'production';
             $trustServerCert = isset($_POST['trust_server_cert']) ? 1 : 0;
+            $historyCaptureMode = $_POST['history_capture_mode'] ?? 'collector';
             
             if (empty($displayName) || empty($hostname) || empty($username)) {
                 $error = 'Display Name, Hostname, and Username are required.';
             } else {
                 $encryptedPassword = encryptPassword($password);
                 
-                $stmt = $db->prepare("INSERT INTO servers (display_name, hostname, port, instance_name, username, password, environment, added_by, trust_server_cert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $encryptedPassword, $environment, $_SESSION['user_id'], $trustServerCert]);
-                $serverId = $db->lastInsertId();
+                $stmt = $db->prepare("INSERT INTO servers (display_name, hostname, port, instance_name, username, password, environment, added_by, trust_server_cert, history_capture_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $encryptedPassword, $environment, $_SESSION['user_id'], $trustServerCert, $historyCaptureMode]);
+                if (getAppSetting('repo_db_type', 'sqlite') === 'mssql') {
+                    $serverId = (int)$db->query("SELECT @@IDENTITY")->fetchColumn();
+                } else {
+                    $serverId = (int)$db->lastInsertId();
+                }
+                
+                if (getAppSetting('repo_db_type', 'sqlite') === 'mssql') {
+                    try {
+                        $stmtCheckBoundary = $db->prepare("
+                            SELECT COUNT(*) 
+                            FROM sys.partition_range_values prv 
+                            JOIN sys.partition_functions pf ON prv.function_id = pf.function_id
+                            WHERE pf.name = 'pf_server_id' AND CAST(prv.value AS INT) = ?
+                        ");
+                        $stmtCheckBoundary->execute([$serverId]);
+                        $boundaryExists = $stmtCheckBoundary->fetchColumn() > 0;
+
+                        if (!$boundaryExists) {
+                            $db->exec("ALTER PARTITION SCHEME ps_server_id NEXT USED [PRIMARY]");
+                            $db->prepare("ALTER PARTITION FUNCTION pf_server_id() SPLIT RANGE (?)")->execute([$serverId]);
+                        }
+                    } catch (Exception $e) {
+                        error_log("Failed to split partition boundary for server ID $serverId: " . $e->getMessage());
+                    }
+                }
                 
                 logAuditEvent($_SESSION['user_id'], 'create_server', 'server', $serverId, "Added server: $displayName ($environment)");
                 $success = "Server '$displayName' added to inventory.";
@@ -61,17 +86,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';
             $environment = $_POST['environment'] ?? 'production';
             $trustServerCert = isset($_POST['trust_server_cert']) ? 1 : 0;
+            $historyCaptureMode = $_POST['history_capture_mode'] ?? 'collector';
             
             if (empty($displayName) || empty($hostname) || empty($username)) {
                 $error = 'Display Name, Hostname, and Username are required.';
             } else {
                 if ($password !== '') {
                     $encryptedPassword = encryptPassword($password);
-                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, password = ?, environment = ?, trust_server_cert = ? WHERE id = ?");
-                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $encryptedPassword, $environment, $trustServerCert, $serverId]);
+                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, password = ?, environment = ?, trust_server_cert = ?, history_capture_mode = ? WHERE id = ?");
+                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $encryptedPassword, $environment, $trustServerCert, $historyCaptureMode, $serverId]);
                 } else {
-                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, environment = ?, trust_server_cert = ? WHERE id = ?");
-                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $environment, $trustServerCert, $serverId]);
+                    $stmt = $db->prepare("UPDATE servers SET display_name = ?, hostname = ?, port = ?, instance_name = ?, username = ?, environment = ?, trust_server_cert = ?, history_capture_mode = ? WHERE id = ?");
+                    $stmt->execute([$displayName, $hostname, $port, $instanceName ?: null, $username, $environment, $trustServerCert, $historyCaptureMode, $serverId]);
                 }
                 
                 logAuditEvent($_SESSION['user_id'], 'update_server', 'server', $serverId, "Updated server: $displayName ($environment)");
@@ -151,7 +177,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Fetch all servers
-$servers = $db->query("SELECT id, display_name, hostname, port, instance_name, username, environment, last_checked, last_status, trust_server_cert FROM servers ORDER BY display_name ASC")->fetchAll();
+$servers = $db->query("SELECT id, display_name, hostname, port, instance_name, username, environment, last_checked, last_status, trust_server_cert, history_capture_mode FROM servers ORDER BY display_name ASC")->fetchAll();
+$globalPollerEnabled = getAppSetting('poller_enabled', false);
 ?>
 
 <div class="dashboard-header-container animate-fade-in">
@@ -202,6 +229,7 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                         <th>Display Name</th>
                         <th>Connection DSN</th>
                         <th>Env</th>
+                        <th>Capture Mode</th>
                         <th>Status</th>
                         <th>Last Checked</th>
                         <th style="text-align: right;">Actions</th>
@@ -210,7 +238,7 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                 <tbody>
                     <?php if (empty($servers)): ?>
                         <tr>
-                            <td colspan="6" style="text-align: center; color: var(--text-muted); font-style: italic;">
+                            <td colspan="7" style="text-align: center; color: var(--text-muted); font-style: italic;">
                                 No servers registered in the database inventory. Use the registration form to add your first instance.
                             </td>
                         </tr>
@@ -242,6 +270,16 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                                     <span class="badge <?= $srv['environment'] === 'production' ? 'env-production' : ($srv['environment'] === 'staging' ? 'env-staging' : ($srv['environment'] === 'dev' ? 'env-dev' : 'env-demo')) ?>" style="padding: 0.1rem 0.3rem;">
                                         <?= sanitize($srv['environment']) ?>
                                     </span>
+                                </td>
+                                <td>
+                                    <?php if (($srv['history_capture_mode'] ?? 'collector') === 'ash'): ?>
+                                        <span class="badge badge-success" style="padding: 0.1rem 0.3rem;">ASH</span>
+                                        <?php if (!$globalPollerEnabled): ?>
+                                            <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning); margin-left: 0.25rem; cursor: help;" title="Warning: Global ASH Poller is disabled. Falling back to periodic Data Collector."></i>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="badge badge-info" style="padding: 0.1rem 0.3rem;">Collector</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="badge <?= $statusBadge ?>"><?= sanitize($srv['last_status']) ?></span>
@@ -354,6 +392,17 @@ $servers = $db->query("SELECT id, display_name, hostname, port, instance_name, u
                         <option value="production" <?= !$editSrv || $editSrv['environment'] === 'production' ? 'selected' : '' ?>>Production Instance (Real connection)</option>
                         <option value="staging" <?= $editSrv && $editSrv['environment'] === 'staging' ? 'selected' : '' ?>>Staging Instance (Real connection)</option>
                         <option value="dev" <?= $editSrv && $editSrv['environment'] === 'dev' ? 'selected' : '' ?>>Dev/Test Instance (Real connection)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="history_capture_mode">Historical Query & Blocking Capture Mode</label>
+                <div class="input-with-icon">
+                    <i class="fa-solid fa-clock-rotate-left input-icon"></i>
+                    <select id="history_capture_mode" name="history_capture_mode" required>
+                        <option value="collector" <?= !$editSrv || ($editSrv['history_capture_mode'] ?? 'collector') === 'collector' ? 'selected' : '' ?>>Data Collector (Periodic, every 5 minutes)</option>
+                        <option value="ash" <?= $editSrv && ($editSrv['history_capture_mode'] ?? '') === 'ash' ? 'selected' : '' ?>>Active Session History (Continuous, real-time)</option>
                     </select>
                 </div>
             </div>

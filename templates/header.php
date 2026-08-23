@@ -47,3 +47,15 @@ $pageTitle = $pageTitle ?? 'SQL Server Monitor';
     <div class="app-container">
         <?php include __DIR__ . '/sidebar.php'; ?>
         <div class="main-content">
+            <?php if (isset($GLOBALS['repo_connection_error'])): ?>
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-warning); border-radius: 6px; padding: 0.75rem 1.25rem; margin-bottom: 1.5rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.75rem; animation: fade-in 0.3s ease-out; color: #f87171;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: var(--color-warning); font-size: 1.1rem;"></i>
+                    <div style="flex-grow: 1;">
+                        <strong>Repository Connection Failed:</strong> <?= sanitize($GLOBALS['repo_connection_error']) ?>.
+                        <span style="color: var(--text-secondary);">Automatically fell back to local SQLite database storage.</span>
+                    </div>
+                    <?php if (stripos($_SERVER['REQUEST_URI'], 'settings.php') === false): ?>
+                        <a href="../admin/settings.php" class="btn btn-glow" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background: var(--color-warning); color: #000; font-weight: 600; text-decoration: none; border-radius: 4px; display: inline-block;">Fix Settings</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>

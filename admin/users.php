@@ -38,7 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $hashed = password_hash($password, PASSWORD_BCRYPT);
                     $stmt = $db->prepare("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)");
                     $stmt->execute([$username, $hashed, $email, $role]);
-                    $newUserId = $db->lastInsertId();
+                    if (getAppSetting('repo_db_type', 'sqlite') === 'mssql') {
+                        $newUserId = (int)$db->query("SELECT @@IDENTITY")->fetchColumn();
+                    } else {
+                        $newUserId = (int)$db->lastInsertId();
+                    }
                     
                     logAuditEvent($_SESSION['user_id'], 'create_user', 'user', $newUserId, "Created user: $username ($role)");
                     $success = "User '$username' created successfully.";
